@@ -38,7 +38,7 @@ fieldset { border: 1px solid #aaa; padding: 12px; }
 .list-tile { text-align: left; min-height: 165px; display: grid; align-content: start; gap: 10px; padding: 16px; background: #fff; overflow-wrap: anywhere; }
 .list-tile strong { font-size: 1.35rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.tags span { border: 1px solid #999; padding: 1px 6px; font-size: .85rem; }
+.tags span { border: 1px solid #999; border-radius: 999px; background: #f1f1eb; padding: 2px 9px; font-size: .85rem; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; border-block: 1px solid #aaa; padding: 12px 0; margin-bottom: 18px; }
 .toolbar label { margin-left: auto; }
 .items { display: grid; gap: 14px; }
@@ -88,3 +88,13 @@ dd { margin: 0; }
   .toolbar label { margin-left: 0; width: 100%; }
   .notice { left: 14px; right: 14px; top: 120px; }
 }
+
+.tag-field { position: relative; display: grid; align-content: start; gap: 5px; min-width: 0; }
+.tag-control { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border: 1px solid #777; background: #fff; padding: 5px; }
+.tag-control:focus-within { outline: 2px solid #17458b; outline-offset: 1px; }
+.tag-control > input { flex: 1; width: auto; min-width: 100px; max-width: 100%; border: 0; outline: 0; padding: 3px; }
+.tag-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; overflow-wrap: anywhere; border: 1px solid #999; border-radius: 999px; background: #f1f1eb; padding: 1px 5px 1px 9px; }
+.tag-chip button { flex-shrink: 0; border: 0; border-radius: 50%; background: transparent; padding: 0 5px; }
+.tag-options { position: absolute; top: calc(100% - 20px); left: 0; right: 0; z-index: 5; max-height: 220px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid #777; background: #fff; box-shadow: 0 4px 10px #0002; }
+.tag-options li { padding: 6px 8px; cursor: pointer; overflow-wrap: anywhere; }
+.tag-options li:hover, .tag-options li[aria-selected="true"] { background: #e4e4dc; }
