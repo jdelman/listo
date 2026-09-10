@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import { resolve } from "node:path";
+import nextEnv from "@next/env";
 import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
 import { ItemEnrichmentProcessor } from "../lib/processing/item-processor";
 import { workerLog, safeError } from "../lib/logging";
@@ -15,7 +16,6 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 try {
-  const { default: nextEnv } = await import("@next/env");
   nextEnv.loadEnvConfig(process.cwd());
   workerLog("worker.starting", "Starting enrichment worker", { workerId, database: resolve(process.env.LISTO_DB_PATH || "data/listo.sqlite") });
   if (!process.env.OPENROUTER_KEY) throw new Error("OPENROUTER_KEY is required for item enrichment");
