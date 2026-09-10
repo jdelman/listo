@@ -1,3 +1,4 @@
+import { auditBackend } from "../audit";
 import type Sqlite from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { ClaimedJob, ItemProcessorStore, JobQueueBackend, NewItem, StorageBackend } from "../contracts";
@@ -12,6 +13,7 @@ type JobRow = { id: string; item_id: string; kind: ProcessingJob["kind"]; status
 export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProcessorStore {
   constructor(private readonly db: Sqlite.Database = openListoDatabase()) {
     this.seedInbox();
+    return auditBackend(this);
   }
 
   getDatabase(): Database {

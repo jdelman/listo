@@ -106,3 +106,32 @@ test("LLM failure retries without changing the item", async () => {
     assert.equal(context.backend.getDatabase().jobs[0].status, "queued");
   } finally { context.close(); }
 });
+
+test("worker events identify the item, job, attempt and retry outcome", async () => {
+  const context = fixture();
+  try {
+    const item = note();
+    const job = context.backend.createItem(item, ["inbox"]);
+    const events: { message: string; fields?: import("../lib/logging").LogFields }[] = [];
+    await runOne({ queue: context.backend, store: context.backend, workerId: "test", processors: [{ kind: "process-item", process: async () => { throw new Error("source unavailable"); } }], onEvent: (message, fields) => events.push({ message, fields }) });
+    assert.equal(events[0].fields?.event, "job.started");
+    assert.equal(events[0].fields?.jobId, job.id);
+    assert.equal(events[0].fields?.itemId, item.id);
+    assert.equal(events[1].fields?.attempt, 1);
+    assert.equal(events[1].fields?.retry, true);
+    assert.equal(events[1].fields?.error, "source unavailable");
+  } finally { context.close(); }
+});
+
+test("worker retries a queue error instead of exiting", async () => {
+  const { runWorker } = await import("../worker/runner");
+  const context = fixture();
+  const controller = new AbortController();
+  let claims = 0;
+  const events: string[] = [];
+  try {
+    await runWorker({ queue: { claim: () => { claims++; if (claims === 1) throw new Error("database busy"); controller.abort(); return null; }, complete() {}, fail() {}, recoverExpired: () => 0 }, store: context.backend, processors: [], workerId: "test", pollMs: 1, onEvent: (message) => events.push(message) }, controller.signal);
+    assert.equal(claims, 2);
+    assert.match(events[0], /queue operation failed/);
+  } finally { context.close(); }
+});

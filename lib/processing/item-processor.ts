@@ -1,3 +1,4 @@
+import type { LogFields } from "../logging";
 import { decodeHTML } from "entities";
 import type { JobProcessor } from "./contracts";
 import { uid, type Item, type ItemMetadata } from "../types";
@@ -6,7 +7,7 @@ import { enrichmentSchema, enrichmentJsonSchema } from "./enrichment-schema";
 export class ItemEnrichmentProcessor implements JobProcessor {
   readonly kind = "process-item" as const;
 
-  constructor(private readonly options: { apiKey?: string; model?: string; fetch?: typeof fetch } = {}) {}
+  constructor(private readonly options: { apiKey?: string; model?: string; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void } = {}) {}
 
   async process(item: Item, signal: AbortSignal) {
     const apiKey = this.options.apiKey ?? process.env.OPENROUTER_KEY;
@@ -25,6 +26,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     }
 
     if (sourceUrl && !["pdf", "image"].includes(item.type)) {
+      this.options.onEvent?.("Fetching item source page", { event: "enrichment.source_started", itemId: item.id, sourceHost: new URL(sourceUrl).hostname });
       const response = await request(sourceUrl, {
         signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
         headers: { "user-agent": "Listo/0.2 metadata worker" },
@@ -33,6 +35,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
       const contentType = response.headers.get("content-type") || "text/html";
       if (!/text\/|application\/(json|ld\+json|xhtml\+xml)/i.test(contentType)) throw new Error("Source is not a supported text page");
       const html = await response.text();
+      this.options.onEvent?.("Fetched item source page", { event: "enrichment.source_completed", itemId: item.id, status: response.status, characters: html.length });
       const title = matchHtml(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
       const description = matchHtml(html, /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["'][^>]*>/i)
         || matchHtml(html, /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description)["'][^>]*>/i);
@@ -51,6 +54,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     attributes.wordCount = words(sourceText).length;
 
     const model = this.options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5.6-luna";
+    this.options.onEvent?.("Requesting item enrichment", { event: "enrichment.model_started", itemId: item.id, model });
     const response = await request("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
@@ -71,6 +75,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     if (choice?.finish_reason !== "stop" || typeof choice.message?.content !== "string") throw new Error("OpenRouter did not return a complete enrichment response");
     const parsed = enrichmentSchema.safeParse(JSON.parse(choice.message.content));
     if (!parsed.success) throw new Error("OpenRouter returned invalid item enrichment");
+    this.options.onEvent?.("Validated item enrichment response", { event: "enrichment.model_completed", itemId: item.id, model });
     const { category, description, specs } = parsed.data;
     const metadata: Partial<ItemMetadata> = {};
     for (const key of ["name", "size", "price", "currency", "brand", "material", "color", "year", "tmdbId", "platform", "platformId"] as const) {
