@@ -190,14 +190,20 @@ function ItemCard({ item, onOpen, controls, draggable, onDragStart, onDrop, expa
   </article>;
 }
 
+function UploadedImage({ src, alt }: { src: string; alt: string }) {
+  // Uploaded data URLs have no known dimensions and cannot benefit from Next.js image optimization.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="preview" src={src} alt={alt} />;
+}
+
 function ItemContent({ item }: { item: Item }) {
   if (item.type === "note") return <Markdown text={item.metadata.markdown ?? ""} />;
-  if (item.type === "image" && item.metadata.dataUrl) return <img className="preview" src={item.metadata.dataUrl} alt={item.title} />;
+  if (item.type === "image" && item.metadata.dataUrl) return <UploadedImage src={item.metadata.dataUrl} alt={item.title} />;
   if (item.type === "pdf") return <p>{item.metadata.dataUrl ? <a href={item.metadata.dataUrl} target="_blank">Open {item.metadata.fileName || "PDF"}</a> : item.sourceUrl ? <a href={item.sourceUrl}>Open PDF</a> : "PDF unavailable"}</p>;
   if (item.type === "media" && item.metadata.platform === "youtube" && item.metadata.platformId) return <div className="video"><iframe src={`https://www.youtube-nocookie.com/embed/${item.metadata.platformId}`} title={item.title} allowFullScreen /></div>;
   if (item.type === "url" || item.type === "media") return item.sourceUrl ? <p><a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl} ↗</a></p> : null;
   if (item.type === "movie") return <p>{item.metadata.year || "Year unknown"}{item.metadata.tmdbId && <> · <a href={`https://www.themoviedb.org/movie/${item.metadata.tmdbId}`} target="_blank" rel="noreferrer">TMDB {item.metadata.tmdbId} ↗</a></>}</p>;
-  if (item.type === "clothing") return <div className="clothing">{item.metadata.dataUrl && <img className="preview" src={item.metadata.dataUrl} alt={item.title} />}<div><p><strong>Size:</strong> {item.metadata.size || "—"}</p><dl>{(item.metadata.measurements ?? []).map((measurement) => <div key={measurement.id}><dt>{measurement.name}</dt><dd>{measurement.value}{measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>)}</dl></div></div>;
+  if (item.type === "clothing") return <div className="clothing">{item.metadata.dataUrl && <UploadedImage src={item.metadata.dataUrl} alt={item.title} />}<div><p><strong>Size:</strong> {item.metadata.size || "—"}</p><dl>{(item.metadata.measurements ?? []).map((measurement) => <div key={measurement.id}><dt>{measurement.name}</dt><dd>{measurement.value}{measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>)}</dl></div></div>;
   return null;
 }
 
