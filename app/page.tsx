@@ -145,9 +145,8 @@ function QuickAdd({ store, afterSave }: { store: ReturnType<typeof useListoStore
 
   return <section className="narrow"><div className="page-heading"><div><h1>Quick Add</h1><p>Save first. Organize when you want to.</p></div></div>
     <div className="tabs"><button aria-current={kind === "quick" ? "page" : undefined} onClick={() => setKind("quick")}>Text, URL, or file</button><button aria-current={kind === "clothing" ? "page" : undefined} onClick={() => setKind("clothing")}>Clothing</button><button aria-current={kind === "movie" ? "page" : undefined} onClick={() => setKind("movie")}>Movie</button></div>
-    <label className="destination">Save to<select value={destination} onChange={(event) => setDestination(event.target.value)}>{store.db.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label>
     {kind === "quick" && <form className="panel form-grid" onSubmit={saveQuick}>
-      <label className="full">Paste a URL, type a note, or name something<textarea rows={7} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Paste URL, type a note, or drop a file…" /></label>
+      <label className="full">Paste a URL, type a note, or name something<textarea autoFocus onFocus={(event) => event.currentTarget.select()} rows={7} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Paste URL, type a note, or drop a file…" /></label>
       <label>File<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
       <label>Type<select value={override} onChange={(event) => setOverride(event.target.value as ItemType | "auto")}><option value="auto">Auto-detect</option>{Object.entries(ITEM_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       <p className="full">Detected as: <strong>{ITEM_LABELS[detected]}</strong></p><button className="primary" type="submit" disabled={!input.trim() && !file}>Save item</button>
@@ -158,6 +157,7 @@ function QuickAdd({ store, afterSave }: { store: ReturnType<typeof useListoStore
       <button className="primary" type="submit">Save clothing</button>
     </form>}
     {kind === "movie" && <form className="panel form-grid" onSubmit={saveMovie}><label>Title<input name="title" required /></label><label>Year<input name="year" inputMode="numeric" /></label><label>TMDB ID <small>(optional)</small><input name="tmdbId" inputMode="numeric" /></label><TagInput options={tagOptions(store)} /><label className="full">Notes<textarea name="description" rows={3} /></label><p className="full"><a href="https://www.themoviedb.org/search/movie" target="_blank" rel="noreferrer">Search TMDB for the ID ↗</a></p><button className="primary">Save movie</button></form>}
+    <label className="destination">Save to<select value={destination} onChange={(event) => setDestination(event.target.value)}>{store.db.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label>
   </section>;
 }
 
