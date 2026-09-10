@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Listo — personal lists",
+  title: "Home — Listo",
   description: "Capture, organize, find, and export mixed-media lists.",
 };
 

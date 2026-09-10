@@ -5,6 +5,7 @@ import { exportList } from "@/lib/export";
 import { useListoStore } from "@/lib/store";
 import { ITEM_LABELS, MEASUREMENT_PRESETS, Item, ItemType, List, Measurement, splitTags, uid } from "@/lib/types";
 
+import { usePageTitle } from "@/app/components/use-page-title";
 import { TagInput } from "@/app/components/tag-input";
 
 const tagOptions = (store: ReturnType<typeof useListoStore>) => [...store.db.lists, ...store.db.items].flatMap((entry) => entry.tags);
@@ -15,6 +16,7 @@ export default function Home() {
   const store = useListoStore();
   const [screen, setScreen] = useState<Screen>({ name: "lists" });
   const [notice, setNotice] = useState("");
+  usePageTitle(screen, store.db.lists, store.db.items, store.ready);
 
   const openList = (id: string) => setScreen({ name: "list", id });
   const flash = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(""), 2500); };
