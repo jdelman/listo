@@ -13,7 +13,7 @@ async function startup(withKey: boolean) {
   const directory = mkdtempSync(join(tmpdir(), "listo-worker-startup-"));
   // The child has an isolated, empty database and only a fake API key. No jobs can run.
   if (withKey) writeFileSync(join(directory, ".env.local"), "OPENROUTER_KEY=startup-test-only\n");
-  const env = { ...process.env, LISTO_DB_PATH: join(directory, "test.sqlite"), LISTO_LOG_DIR: join(directory, "logs") };
+  const env: NodeJS.ProcessEnv = { ...process.env, LISTO_DB_PATH: join(directory, "test.sqlite"), LISTO_LOG_DIR: join(directory, "logs") };
   delete env.OPENROUTER_KEY;
   const child = spawn(process.execPath, [tsx, worker], {
     cwd: directory,
