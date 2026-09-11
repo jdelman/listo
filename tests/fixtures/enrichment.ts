@@ -1,5 +1,6 @@
 export function enrichment(overrides: Record<string, unknown> = {}) {
   return {
+    thumbnailUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=",
     category: "note", description: "A useful note about durable background processing.",
     specs: { name: null, size: null, measurements: [], price: null, currency: null, brand: null, material: null, color: null, year: null, tmdbId: null, platform: null, platformId: null, attributes: [] },
     ...overrides,

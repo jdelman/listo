@@ -188,7 +188,7 @@ function ItemScreen({ store, itemId, setScreen, flash }: { store: ReturnType<typ
 function ItemCard({ item, onOpen, controls, draggable, onDragStart, onDrop, expanded = false }: { item: Item; onOpen: () => void; controls?: React.ReactNode; draggable?: boolean; onDragStart?: React.DragEventHandler; onDrop?: React.DragEventHandler; expanded?: boolean }) {
   return <article className="item-card" draggable={draggable} onDragStart={onDragStart} onDragOver={(event) => draggable && event.preventDefault()} onDrop={onDrop}>
     <div className="item-top"><div><small>{ITEM_LABELS[item.type]} · {availability(item)}</small><h2>{expanded ? item.title : <button className="title-button" onClick={onOpen}>{item.title}</button>}</h2></div>{controls && <div className="actions">{controls}</div>}</div>
-    {item.description && <p>{item.description}</p>}<ItemContent item={item} /><TagRow tags={item.tags} />
+    {item.metadata.thumbnailUrl && <UploadedImage src={item.metadata.thumbnailUrl} alt={item.title} />}{item.description && <p>{item.description}</p>}<ItemContent item={item} /><TagRow tags={item.tags} />
   </article>;
 }
 

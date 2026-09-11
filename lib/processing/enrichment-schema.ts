@@ -14,13 +14,13 @@ export const specsSchema = z.object({
 }).strict();
 export const enrichmentSchema = z.object({
   category: z.enum(Object.keys(ITEM_LABELS) as [ItemType, ...ItemType[]]),
-  description: z.string().trim().min(1), specs: specsSchema,
+  description: z.string().trim().min(1), thumbnailUrl: z.string().nullable(), specs: specsSchema,
 }).strict();
 
 const nullable = (type: string) => ({ type: [type, "null"] });
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 export const enrichmentJsonSchema = object({
-  category: { type: "string", enum: Object.keys(ITEM_LABELS) }, description: { type: "string" },
+  category: { type: "string", enum: Object.keys(ITEM_LABELS) }, description: { type: "string" }, thumbnailUrl: nullable("string"),
   specs: object({
     name: nullable("string"), size: nullable("string"),
     measurements: { type: "array", items: object({ name: { type: "string" }, value: { type: ["string", "number"] }, unit: { enum: ["in", "cm", null] } }) },

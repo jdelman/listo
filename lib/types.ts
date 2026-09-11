@@ -4,6 +4,7 @@ export type ViewMode = "list" | "compact" | "gallery" | "playlist" | "document" 
 export type Measurement = { id: string; name: string; value: string | number; unit?: "in" | "cm" };
 
 export type ItemMetadata = {
+  thumbnailUrl?: string;
   price?: number;
   currency?: string;
   brand?: string;

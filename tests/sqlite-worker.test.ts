@@ -64,6 +64,7 @@ test("the worker claims, processes, and completes a job", async () => {
     assert.equal(state.items[0].type, "clothing");
     assert.equal(state.items[0].metadata.size, "M");
     assert.equal(state.items[0].metadata.price, 42);
+    assert.match(state.items[0].metadata.thumbnailUrl ?? "", /^\/thumbnails\/[a-f0-9]{64}\.png$/);
     assert.equal(state.items[0].description, enrichment().description);
     assert.equal(state.items[0].metadata.markdown, item.metadata.markdown);
     assert.match(state.items[0].metadata.derived?.summary ?? "", /useful note/i);
