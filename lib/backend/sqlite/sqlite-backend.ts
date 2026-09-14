@@ -1,3 +1,4 @@
+import { spotifyPlaylistId } from "../../spotify";
 import { auditBackend } from "../audit";
 import type Sqlite from "better-sqlite3";
 import { randomUUID } from "node:crypto";
@@ -5,7 +6,7 @@ import type { ClaimedJob, ItemProcessorStore, JobQueueBackend, NewItem, StorageB
 import type { Database, Item, ItemMetadata, List, ListItem, ProcessingJob } from "../../types";
 import { openListoDatabase } from "./database";
 
-type ListRow = { id: string; title: string; description: string; tags_json: string; default_view: List["defaultView"]; created_at: string; updated_at: string };
+type ListRow = { metadata_json: string; id: string; title: string; description: string; tags_json: string; default_view: List["defaultView"]; created_at: string; updated_at: string };
 type ItemRow = { id: string; type: Item["type"]; title: string; description: string; tags_json: string; source_url: string | null; availability_json: string; metadata_json: string; revision: number; created_at: string; updated_at: string };
 type ListItemRow = { id: string; list_id: string; item_id: string; position: number };
 type JobRow = { id: string; item_id: string; kind: ProcessingJob["kind"]; status: ProcessingJob["status"]; input_revision: number; attempts: number; max_attempts: number; run_at: string; lock_token: string | null; locked_at: string | null; last_error: string | null; created_at: string; updated_at: string };
@@ -50,8 +51,8 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     const current = this.db.prepare("SELECT * FROM lists WHERE id = ?").get(id) as ListRow | undefined;
     if (!current) throw new Error("List not found");
     const list = { ...toList(current), ...patch, id, updatedAt: new Date().toISOString() };
-    this.db.prepare("UPDATE lists SET title = ?, description = ?, tags_json = ?, default_view = ?, updated_at = ? WHERE id = ?")
-      .run(list.title, list.description, JSON.stringify(list.tags), list.defaultView, list.updatedAt, id);
+    this.db.prepare("UPDATE lists SET title = ?, description = ?, tags_json = ?, default_view = ?, updated_at = ?, metadata_json = ? WHERE id = ?")
+      .run(list.title, list.description, JSON.stringify(list.tags), list.defaultView, list.updatedAt, JSON.stringify(list.metadata ?? {}), id);
   }
 
   deleteList(id: string): void {
@@ -170,14 +171,35 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     return result.changes === 1;
   }
 
+  /** Each write is fenced by the current lease and input revision. Retried positions are idempotent. */
+  saveSpotifyImport(job: ClaimedJob, list: List, track?: Item, position?: number): void {
+    this.db.transaction(() => {
+      const active = this.db.prepare("SELECT id FROM jobs WHERE id = ? AND lock_token = ? AND status = 'running'").get(job.id, job.lockToken);
+      if (!active || this.getItem(job.itemId)?.revision !== job.inputRevision) throw new Error("Spotify import lease or source item changed");
+      const existing = this.db.prepare("SELECT * FROM lists WHERE id = ?").get(list.id) as ListRow | undefined;
+      if (existing && toList(existing).metadata?.spotifySnapshotId !== list.metadata?.spotifySnapshotId) throw new Error("Spotify playlist changed since partial import; paste the playlist again for a fresh import");
+      if (!existing) {
+        const source = this.getItem(job.itemId)!;
+        if (source.metadata.importedListId) throw new Error("Imported list was deleted");
+        this.insertList(list, false);
+        this.db.prepare("UPDATE items SET metadata_json = ? WHERE id = ?").run(JSON.stringify({ ...source.metadata, importedListId: list.id }), source.id);
+      }
+      if (track) {
+        this.insertItem(track, true);
+        this.db.prepare("INSERT OR IGNORE INTO list_items(id, list_id, item_id, position) VALUES (?, ?, ?, ?)").run(track.id, list.id, track.id, position);
+      }
+      this.db.prepare("UPDATE jobs SET locked_at = ? WHERE id = ? AND lock_token = ?").run(new Date().toISOString(), job.id, job.lockToken);
+    })();
+  }
+
   private seedInbox() {
     const timestamp = new Date().toISOString();
     this.db.prepare("INSERT OR IGNORE INTO lists(id, title, description, tags_json, default_view, created_at, updated_at) VALUES ('inbox', 'Inbox', 'Everything can land here first.', '[]', 'list', ?, ?)").run(timestamp, timestamp);
   }
 
   private insertList(list: List, ignore: boolean) {
-    this.db.prepare(`INSERT ${ignore ? "OR IGNORE " : ""}INTO lists(id, title, description, tags_json, default_view, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-      .run(list.id, list.title, list.description, JSON.stringify(list.tags), list.defaultView, list.createdAt, list.updatedAt);
+    this.db.prepare(`INSERT ${ignore ? "OR IGNORE " : ""}INTO lists(id, title, description, tags_json, default_view, created_at, updated_at, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(list.id, list.title, list.description, JSON.stringify(list.tags), list.defaultView, list.createdAt, list.updatedAt, JSON.stringify(list.metadata ?? {}));
   }
 
   private insertItem(item: Item, ignore: boolean) {
@@ -188,9 +210,11 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
   private enqueueItemJob(itemId: string, inputRevision: number, ignore: boolean): ProcessingJob {
     const timestamp = new Date().toISOString();
     const id = randomUUID();
-    this.db.prepare(`INSERT ${ignore ? "OR IGNORE " : ""}INTO jobs(id, item_id, kind, status, input_revision, attempts, max_attempts, run_at, created_at, updated_at) VALUES (?, ?, 'process-item', 'queued', ?, 0, 5, ?, ?, ?)`)
-      .run(id, itemId, inputRevision, timestamp, timestamp, timestamp);
-    const row = this.db.prepare("SELECT * FROM jobs WHERE item_id = ? AND kind = 'process-item' AND input_revision = ?").get(itemId, inputRevision) as JobRow;
+    const item = this.getItem(itemId);
+    const kind = spotifyPlaylistId(item?.sourceUrl || item?.metadata.url || item?.metadata.markdown || "") ? "import-spotify-playlist" : "process-item";
+    this.db.prepare(`INSERT ${ignore ? "OR IGNORE " : ""}INTO jobs(id, item_id, kind, status, input_revision, attempts, max_attempts, run_at, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, 0, 5, ?, ?, ?)`)
+      .run(id, itemId, kind, inputRevision, timestamp, timestamp, timestamp);
+    const row = this.db.prepare("SELECT * FROM jobs WHERE item_id = ? AND kind = ? AND input_revision = ?").get(itemId, kind, inputRevision) as JobRow;
     return toJob(row);
   }
 
@@ -206,7 +230,7 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
   }
 }
 
-function toList(row: ListRow): List { return { id: row.id, title: row.title, description: row.description, tags: JSON.parse(row.tags_json), defaultView: row.default_view, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function toList(row: ListRow): List { return { metadata: JSON.parse(row.metadata_json), id: row.id, title: row.title, description: row.description, tags: JSON.parse(row.tags_json), defaultView: row.default_view, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function toItem(row: ItemRow): Item { return { id: row.id, type: row.type, title: row.title, description: row.description, tags: JSON.parse(row.tags_json), sourceUrl: row.source_url ?? undefined, availability: JSON.parse(row.availability_json), metadata: JSON.parse(row.metadata_json), revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function toListItem(row: ListItemRow): ListItem { return { id: row.id, listId: row.list_id, itemId: row.item_id, position: row.position }; }
 function toJob(row: JobRow): ProcessingJob { return { id: row.id, itemId: row.item_id, kind: row.kind, status: row.status, inputRevision: row.input_revision, attempts: row.attempts, maxAttempts: row.max_attempts, runAt: row.run_at, lockedAt: row.locked_at ?? undefined, lastError: row.last_error ?? undefined, createdAt: row.created_at, updatedAt: row.updated_at }; }

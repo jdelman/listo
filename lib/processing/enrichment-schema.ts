@@ -8,7 +8,7 @@ export const specsSchema = z.object({
   price: z.number().nonnegative().nullable(), currency: z.string().nullable(),
   brand: z.string().nullable(), material: z.string().nullable(), color: z.string().nullable(),
   year: z.number().int().nullable(), tmdbId: z.number().int().nullable(),
-  platform: z.enum(["youtube", "apple_music", "soundcloud", "other"]).nullable(),
+  platform: z.enum(["youtube", "apple_music", "soundcloud", "spotify", "other"]).nullable(),
   platformId: z.string().nullable(),
   attributes: z.array(z.object({ name: z.string(), value: z.union([z.string(), z.number(), z.array(z.string())]) }).strict()),
 }).strict();
@@ -27,7 +27,7 @@ export const enrichmentJsonSchema = object({
     price: { ...nullable("number"), minimum: 0 }, currency: nullable("string"),
     brand: nullable("string"), material: nullable("string"), color: nullable("string"),
     year: nullable("integer"), tmdbId: nullable("integer"),
-    platform: { enum: ["youtube", "apple_music", "soundcloud", "other", null] }, platformId: nullable("string"),
+    platform: { enum: ["youtube", "apple_music", "soundcloud", "spotify", "other", null] }, platformId: nullable("string"),
     attributes: { type: "array", items: object({ name: { type: "string" }, value: { anyOf: [{ type: "string" }, { type: "number" }, { type: "array", items: { type: "string" } }] } }) },
   }),
 });

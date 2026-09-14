@@ -12,8 +12,13 @@ export type ItemMetadata = {
   color?: string;
   markdown?: string;
   url?: string;
-  platform?: "youtube" | "apple_music" | "soundcloud" | "other";
+  platform?: "youtube" | "apple_music" | "soundcloud" | "spotify" | "other";
   platformId?: string;
+  trackName?: string;
+  artist?: string;
+  artists?: string[];
+  spotifyUrl?: string;
+  importedListId?: string;
   fileName?: string;
   dataUrl?: string;
   mimeType?: string;
@@ -37,7 +42,7 @@ export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancell
 export type ProcessingJob = {
   id: string;
   itemId: string;
-  kind: "process-item";
+  kind: "process-item" | "import-spotify-playlist";
   status: JobStatus;
   inputRevision: number;
   attempts: number;
@@ -64,6 +69,7 @@ export type Item = {
 };
 
 export type List = {
+  metadata?: { thumbnailUrl?: string; sourceUrl?: string; spotifySnapshotId?: string; spotifyPlaylistId?: string };
   id: string;
   title: string;
   description: string;

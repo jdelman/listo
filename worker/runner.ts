@@ -30,7 +30,7 @@ export async function runOne(dependencies: WorkerDependencies, signal = new Abor
       dependencies.onEvent?.("Skipped outdated item revision", { ...fields, event: "job.skipped" });
       return true;
     }
-    const derived = await processor.process(item, signal);
+    const derived = await processor.process(item, signal, job);
     const saved = await dependencies.store.saveDerivedMetadata(item.id, job.inputRevision, derived);
     if (!saved) throw new Error("Item changed before processing completed");
     await dependencies.queue.complete(job.id, job.lockToken);

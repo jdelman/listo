@@ -28,65 +28,73 @@ function migrate(db: Database.Database) {
     );
   `);
 
-  const version = db.prepare("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations").get() as { version: number };
-  if (version.version >= 1) return;
-
   db.transaction(() => {
-    db.exec(`
-      CREATE TABLE lists (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        tags_json TEXT NOT NULL DEFAULT '[]',
-        default_view TEXT NOT NULL DEFAULT 'list',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+    const version = db.prepare("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations").get() as { version: number };
+    if (version.version >= 2) return;
+    if (version.version < 1) {
 
-      CREATE TABLE items (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        tags_json TEXT NOT NULL DEFAULT '[]',
-        source_url TEXT,
-        availability_json TEXT NOT NULL,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        revision INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE lists (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          default_view TEXT NOT NULL DEFAULT 'list',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
 
-      CREATE TABLE list_items (
-        id TEXT PRIMARY KEY,
-        list_id TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
-        item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-        position INTEGER NOT NULL,
-        UNIQUE(list_id, item_id)
-      );
+        CREATE TABLE items (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          source_url TEXT,
+          availability_json TEXT NOT NULL,
+          metadata_json TEXT NOT NULL DEFAULT '{}',
+          revision INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
 
-      CREATE INDEX list_items_order ON list_items(list_id, position);
+        CREATE TABLE list_items (
+          id TEXT PRIMARY KEY,
+          list_id TEXT NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+          item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          UNIQUE(list_id, item_id)
+        );
 
-      CREATE TABLE jobs (
-        id TEXT PRIMARY KEY,
-        item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-        kind TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'queued',
-        input_revision INTEGER NOT NULL,
-        attempts INTEGER NOT NULL DEFAULT 0,
-        max_attempts INTEGER NOT NULL DEFAULT 5,
-        run_at TEXT NOT NULL,
-        lock_token TEXT,
-        locked_at TEXT,
-        last_error TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE(item_id, kind, input_revision)
-      );
+        CREATE INDEX list_items_order ON list_items(list_id, position);
 
-      CREATE INDEX jobs_ready ON jobs(status, run_at, created_at);
-    `);
+        CREATE TABLE jobs (
+          id TEXT PRIMARY KEY,
+          item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+          kind TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'queued',
+          input_revision INTEGER NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          max_attempts INTEGER NOT NULL DEFAULT 5,
+          run_at TEXT NOT NULL,
+          lock_token TEXT,
+          locked_at TEXT,
+          last_error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(item_id, kind, input_revision)
+        );
 
-    db.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(1, new Date().toISOString());
-  })();
+        CREATE INDEX jobs_ready ON jobs(status, run_at, created_at);
+      `);
+
+      db.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(1, new Date().toISOString());
+    })();
+    }
+    db.transaction(() => {
+      db.exec("ALTER TABLE lists ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
+      db.prepare("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)").run(2, new Date().toISOString());
+    })();
+  }).immediate();
 }
