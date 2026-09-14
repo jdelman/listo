@@ -3,7 +3,7 @@ import { authError, go, requestToken, sameOrigin, sessionCookie } from "@/lib/au
 export async function POST(request: Request) {
   try { sameOrigin(request); } catch { return authError("Invalid request origin", 403); }
   new Accounts().logout(requestToken(request));
-  const response = go("/login", sessionCookie("", true));
+  const response = go("/login", sessionCookie("", true, request));
   response.headers.set("Clear-Site-Data", '"cache"');
   return response;
 }

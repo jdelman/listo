@@ -14,7 +14,9 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern data",
     "mcp": "tsx mcp/stdio.ts",
-    "accounts": "node --import tsx scripts/accounts.ts"
+    "accounts": "node --import tsx scripts/accounts.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
+    "@playwright/test": "^1.63.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",

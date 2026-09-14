@@ -61,7 +61,7 @@ test("login, password change, recovery, session expiry and logout revoke access"
     assert.ok(f.accounts.session(last));
     const response = await logout(request()); assert.equal(response.status, 303);
     assert.match(response.headers.get("set-cookie")!, /Max-Age=0/);
-    assert.equal(response.headers.get("location"), "http://localhost:3000/login");
+    assert.equal(response.headers.get("location"), "/login");
     assert.equal(f.accounts.session(last), undefined);
     assert.equal((await logout(request())).status, 303);
     assert.equal((await state(new Request("http://localhost:3000/api/state"))).status, 401);

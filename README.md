@@ -71,7 +71,7 @@ npm run accounts -- reset jdelman
 
 The reset command prints a single-use recovery link valid for 30 minutes. Treat the link as a credential. Email recovery is not configured. Password changes and recovery revoke all browser sessions and MCP grants; ordinary logout revokes only the current browser session.
 
-Set `LISTO_ORIGIN` to the exact canonical origin used in the browser (default `http://localhost:3000`). For remote access, use an HTTPS reverse proxy and set this value to that HTTPS origin; it controls cookies, same-origin checks, and OAuth discovery. Do not use the old LAN aliases without configuring the canonical HTTPS origin. Both processes must use the same database path. Serve this Node application on a trusted host; database, backups, and thumbnail files are private server files.
+Set `LISTO_ORIGIN` to the canonical OAuth origin (default `http://localhost:3000`). The local installation also accepts `localhost`, `127.0.0.1`, `[::1]`, `jdsrv`, and `jdsrv.local` on that same scheme and port. Browser forms must originate from the exact hostname receiving the request; redirects stay on that hostname. An HTTPS deployment with a public hostname accepts only its configured origin, uses Secure cookies, and should preserve the original Host and scheme through its reverse proxy. Both processes must use the same database path. Serve this Node application on a trusted host; database, backups, and thumbnail files are private server files.
 
 ## Remote MCP with OAuth
 
@@ -94,3 +94,19 @@ Before upgrading an existing installation, stop the web app, MCP clients, and wo
 For rollback, stop all writers, restore the matching database and thumbnails with the prior application version, and restart. Do not run old and new application versions against the same database. In this checkout, the verified activation snapshot and backup are under ignored `data/backups/`.
 
 The older `.openai/hosting.json` configuration belongs to a separate Cloudflare Sites deployment. This implementation targets the current Node/SQLite application; publishing it there requires a separate D1/R2 storage and worker migration. Do not publish the old `dist` output as if it contains these account changes.
+
+
+## Browser regression tests
+
+```sh
+npx playwright install chromium
+npm run test:e2e
+# Optional interactive test runner:
+npm run test:e2e:ui
+```
+
+The Playwright suite uses real Chromium against a temporary copy of the Next.js app and a fresh SQLite database on port 3100. It never reuses the running personal app, loads its `.env`, or runs the enrichment worker. The suite maps the LAN hostnames to loopback inside the test browser, so local DNS setup is unnecessary.
+
+Tests run against `localhost`, `127.0.0.1`, `jdsrv`, and `jdsrv.local`, checking login and return URLs, host-scoped cookies, incorrect-password feedback, password-recovery navigation, saved lists after reload, logout, protected routes, and rejection of cross-site login forms. Origin unit tests also cover forged proxy headers, unsupported hosts/ports, and HTTPS cookies. Traces and screenshots are saved on failure in ignored test-report directories.
+
+GitHub Actions runs the unit/integration suite, lint, production build, and browser suite on pushes to main and pull requests. These tests cover authentication flows in Chromium; they are not yet full cross-browser or whole-app coverage.

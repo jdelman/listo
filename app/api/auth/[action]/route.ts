@@ -14,17 +14,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ act
     if (action === "login") {
       const token = await accounts.login(value("username").trim().slice(0, 64), value("password"));
       if (!token) return go(`/login?error=${encodeURIComponent("Username or password is incorrect.")}&returnTo=${encodeURIComponent(safeReturn(value("returnTo")))}`);
-      return go(safeReturn(value("returnTo")), sessionCookie(token));
+      return go(safeReturn(value("returnTo")), sessionCookie(token, false, request));
     }
     if (action === "reset") {
       await accounts.resetPassword(value("token"), value("password"));
-      return go("/login?message=Password+updated.+Sign+in+with+your+new+password.", sessionCookie("", true));
+      return go("/login?message=Password+updated.+Sign+in+with+your+new+password.", sessionCookie("", true, request));
     }
     const user = requestUser(request);
     if (!user) return authError("Sign in required", 401);
     if (action === "password") {
       await accounts.changePassword(user.id, value("currentPassword"), value("password"));
-      return go("/login?message=Password+updated.+Please+sign+in+again.", sessionCookie("", true));
+      return go("/login?message=Password+updated.+Please+sign+in+again.", sessionCookie("", true, request));
     }
     if (action === "revoke") {
       accounts.db.prepare("UPDATE oauth_grants SET revoked=1 WHERE id=? AND user_id=?").run(value("grantId"), user.id);
