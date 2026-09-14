@@ -28,6 +28,7 @@ export type ItemMetadata = {
   size?: string;
   measurements?: Measurement[];
   derived?: {
+    title?: string;
     summary: string;
     category?: ItemType;
     specs?: Partial<Omit<ItemMetadata, "derived">>;

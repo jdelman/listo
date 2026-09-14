@@ -27,6 +27,7 @@ test("decodes URL escapes and HTML entities in all extracted page text", async (
   } satisfies Item;
   const result = await new ItemEnrichmentProcessor({ apiKey: "test-key" }).process(item, new AbortController().signal);
   assert.equal(result.attributes.fetchedTitle, "Hello world — café 😀");
+  assert.equal(result.title, "Hello world — café 😀");
   assert.equal(result.attributes.fetchedDescription, "Tom & Jerry © — done");
   assert.match(result.summary, /Body text € … A\+B 100% legit %ZZ %FF end/);
   assert.doesNotMatch(result.summary, /%20|&mdash;|&euro;/);
@@ -55,4 +56,14 @@ test("rejects invalid categories, malformed JSON, truncated output and API error
 
 test("requires a key before fetching source content", async () => {
   await assert.rejects(new ItemEnrichmentProcessor({ apiKey: "", fetch: async () => { throw new Error("should not fetch"); } }).process(baseItem, new AbortController().signal), /OPENROUTER_KEY/);
+});
+
+
+test("leaves the title unchanged when the page title is missing or blank", async () => {
+  for (const html of ["<p>No title</p>", "<title> \n &nbsp; </title>"]) {
+    const result = await new ItemEnrichmentProcessor({ apiKey: "test", fetch: async (url) =>
+      url === "https://openrouter.ai/api/v1/chat/completions" ? completion(enrichment()) : new Response(html),
+    }).process({ ...baseItem, type: "url", sourceUrl: "https://example.com" }, new AbortController().signal);
+    assert.equal(result.title, undefined);
+  }
 });

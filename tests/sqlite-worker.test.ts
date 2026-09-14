@@ -63,6 +63,7 @@ test("the worker claims, processes, and completes a job", async () => {
     const state = context.backend.getDatabase();
     assert.equal(state.jobs[0].status, "completed");
     assert.equal(state.items[0].type, "clothing");
+    assert.equal(state.items[0].title, item.title);
     assert.equal(state.items[0].metadata.size, "M");
     assert.equal(state.items[0].metadata.price, 42);
     assert.match(state.items[0].metadata.thumbnailUrl ?? "", /^\/thumbnails\/[a-f0-9]{64}\.png$/);
@@ -91,9 +92,10 @@ test("does not overwrite a concurrent edit with enrichment", () => {
   try {
     const item = note();
     context.backend.createItem(item, ["inbox"]);
-    context.backend.updateItem(item.id, { description: "Edited by user" });
-    assert.equal(context.backend.saveDerivedMetadata(item.id, 1, { summary: "LLM summary", category: "clothing", specs: { size: "M" }, attributes: {}, processedAt: new Date().toISOString(), processorVersion: "test" }), false);
+    context.backend.updateItem(item.id, { title: "My title", description: "Edited by user" });
+    assert.equal(context.backend.saveDerivedMetadata(item.id, 1, { title: "Website title", summary: "LLM summary", category: "clothing", specs: { size: "M" }, attributes: {}, processedAt: new Date().toISOString(), processorVersion: "test" }), false);
     assert.equal(context.backend.getItem(item.id)?.description, "Edited by user");
+    assert.equal(context.backend.getItem(item.id)?.title, "My title");
     assert.equal(context.backend.getItem(item.id)?.type, "note");
   } finally { context.close(); }
 });
@@ -146,11 +148,12 @@ test("classifying a saved product link as clothing preserves its original URL", 
     const item = { ...note(), type: "url" as const, sourceUrl, metadata: { url: sourceUrl }, availability: { external: true, imported: false, localReference: false } };
     context.backend.createItem(item, ["inbox"]);
     assert.equal(context.backend.saveDerivedMetadata(item.id, 1, {
-      category: "clothing", summary: "Blue shirt", specs: { size: "M" },
+      title: "Blue shirt | Example", category: "clothing", summary: "Blue shirt", specs: { size: "M" },
       attributes: {}, processedAt: new Date().toISOString(), processorVersion: "test",
     }), true);
     const saved = context.backend.getDatabase().items[0];
     assert.equal(saved.type, "clothing");
+    assert.equal(saved.title, "Blue shirt | Example");
     assert.equal(saved.sourceUrl, sourceUrl);
     assert.equal(saved.metadata.url, sourceUrl);
     assert.equal(saved.availability.external, true);

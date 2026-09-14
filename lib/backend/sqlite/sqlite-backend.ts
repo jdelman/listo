@@ -187,8 +187,8 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     const item = this.getItem(itemId);
     if (!item || item.revision !== inputRevision) return false;
     const metadata = { ...item.metadata, ...derived.specs, derived };
-    const result = this.db.prepare("UPDATE items SET metadata_json = ?, updated_at = ?, type = ?, description = ? WHERE id = ? AND revision = ?")
-      .run(JSON.stringify(metadata), derived.processedAt, derived.category ?? item.type, derived.summary, itemId, inputRevision);
+    const result = this.db.prepare("UPDATE items SET metadata_json = ?, updated_at = ?, type = ?, description = ?, title = ? WHERE id = ? AND revision = ?")
+      .run(JSON.stringify(metadata), derived.processedAt, derived.category ?? item.type, derived.summary, derived.title?.trim() || item.title, itemId, inputRevision);
     return result.changes === 1;
   }
 

@@ -17,6 +17,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     const request = this.options.fetch ?? fetch;
     const storage = this.options.storage ?? new FileThumbnailStorage();
     let thumbnailUrl: string | undefined;
+    let pageTitle: string | undefined;
     const tryImages = async (urls: string[]) => {
       for (const url of urls) {
         try { thumbnailUrl = await storeThumbnail(url, storage, request, signal); return; }
@@ -49,7 +50,8 @@ export class ItemEnrichmentProcessor implements JobProcessor {
       const html = await response.text();
       this.options.onEvent?.("Fetched item source page", { event: "enrichment.source_completed", itemId: item.id, status: response.status, characters: html.length });
       if (!thumbnailUrl) await tryImages(metadataImages(html, response.url || sourceUrl));
-      const title = matchHtml(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
+      const title = matchHtml(html, /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
+      pageTitle = title || undefined;
       const description = matchHtml(html, /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["'][^>]*>/i)
         || matchHtml(html, /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description)["'][^>]*>/i);
       if (title) attributes.fetchedTitle = title;
@@ -98,7 +100,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     }
     if (specs.measurements.length) metadata.measurements = specs.measurements.map(({ unit, ...measurement }) => ({ ...measurement, id: uid(), ...(unit ? { unit } : {}) }));
     for (const attribute of specs.attributes) Object.defineProperty(attributes, attribute.name, { value: attribute.value, enumerable: true, configurable: true });
-    return { summary: description, category, specs: metadata, attributes, processedAt: new Date().toISOString(), processorVersion: `openrouter:${model}:v1` };
+    return { title: pageTitle, summary: description, category, specs: metadata, attributes, processedAt: new Date().toISOString(), processorVersion: `openrouter:${model}:v1` };
   }
 }
 
