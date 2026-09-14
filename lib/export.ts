@@ -11,6 +11,8 @@ function renderItem(item: Item) {
   if (item.type === "pdf" && item.metadata.dataUrl) content += `<p><a download="${escapeHtml(item.metadata.fileName)}" href="${item.metadata.dataUrl}">Open included PDF</a></p>`;
   if (item.type === "movie") content += `<p>${item.metadata.year ?? ""}${item.metadata.tmdbId ? ` · TMDB ${item.metadata.tmdbId}` : ""}</p>`;
   if (item.type === "clothing") {
+    const sourceUrl = item.sourceUrl || item.metadata.url;
+    if (sourceUrl) content += `<p><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(sourceUrl)}</a></p>`;
     if (item.metadata.dataUrl) content += `<img src="${item.metadata.dataUrl}" alt="${escapeHtml(item.title)}">`;
     content += `<p><strong>Size:</strong> ${escapeHtml(item.metadata.size || "—")}</p>`;
     content += `<dl>${(item.metadata.measurements ?? []).map((measurement) => `<div><dt>${escapeHtml(measurement.name)}</dt><dd>${escapeHtml(measurement.value)}${measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>`).join("")}</dl>`;

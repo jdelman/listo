@@ -137,3 +137,22 @@ test("worker retries a queue error instead of exiting", async () => {
     assert.match(events[0], /queue operation failed/);
   } finally { context.close(); }
 });
+
+
+test("classifying a saved product link as clothing preserves its original URL", () => {
+  const context = fixture();
+  try {
+    const sourceUrl = "https://example.com/products/shirt?color=blue&size=M";
+    const item = { ...note(), type: "url" as const, sourceUrl, metadata: { url: sourceUrl }, availability: { external: true, imported: false, localReference: false } };
+    context.backend.createItem(item, ["inbox"]);
+    assert.equal(context.backend.saveDerivedMetadata(item.id, 1, {
+      category: "clothing", summary: "Blue shirt", specs: { size: "M" },
+      attributes: {}, processedAt: new Date().toISOString(), processorVersion: "test",
+    }), true);
+    const saved = context.backend.getDatabase().items[0];
+    assert.equal(saved.type, "clothing");
+    assert.equal(saved.sourceUrl, sourceUrl);
+    assert.equal(saved.metadata.url, sourceUrl);
+    assert.equal(saved.availability.external, true);
+  } finally { context.close(); }
+});
