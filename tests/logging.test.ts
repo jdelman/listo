@@ -1,3 +1,4 @@
+import { accountFixture } from "./account-fixture";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -56,9 +57,10 @@ test("redacts credentials from errors", () => {
 });
 
 test("browser events validate input and reject cross-origin requests", async (t) => {
+  const fixture = accountFixture(); t.after(() => fixture.close());
   const { POST } = await import("../app/api/events/route");
   t.mock.method(console, "error", () => {});
-  const request = (body: unknown, origin = "http://jdsrv.local:3000") => new Request("http://jdsrv.local:3000/api/events", { method: "POST", headers: { origin }, body: JSON.stringify(body) });
+  const request = (body: unknown, origin = "http://localhost:3000") => new Request("http://localhost:3000/api/events", { method: "POST", headers: { origin, cookie: fixture.cookie }, body: JSON.stringify(body) });
   assert.equal((await POST(request({ action: "activate", control: "Export HTML", path: "/lists/example" }))).status, 204);
   assert.equal((await POST(request({ action: "activate", path: "/lists" }, "https://other.example"))).status, 403);
   assert.equal((await POST(request({ action: "unknown", path: "/lists" }))).status, 400);

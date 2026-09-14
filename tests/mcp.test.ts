@@ -1,3 +1,4 @@
+import { LEGACY_USER_ID } from "../lib/backend/sqlite/accounts-migration";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,14 +14,14 @@ test("stdio MCP discovers tools, reads ordered lists, persists additions, and re
   const directory = mkdtempSync(join(tmpdir(), "listo-mcp-"));
   const path = join(directory, "test.sqlite");
   const database = openListoDatabase(path);
-  const backend = new SQLiteBackend(database);
+  const backend = new SQLiteBackend(database, LEGACY_USER_ID);
   const timestamp = new Date().toISOString();
   backend.createList({ id: "reading", title: "Reading", description: "", tags: [], defaultView: "list", createdAt: timestamp, updatedAt: timestamp });
   const client = new Client({ name: "listo-test", version: "1.0.0" });
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: ["--import", join(process.cwd(), "node_modules/tsx/dist/loader.mjs"), join(process.cwd(), "mcp/stdio.ts")],
-    cwd: tmpdir(), env: { ...process.env as Record<string, string>, LISTO_DB_PATH: path }, stderr: "pipe",
+    cwd: tmpdir(), env: { ...process.env as Record<string, string>, LISTO_MCP_USER: "jdelman", LISTO_DB_PATH: path }, stderr: "pipe",
   });
   try {
     await client.connect(transport);

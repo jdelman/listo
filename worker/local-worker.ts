@@ -20,7 +20,7 @@ try {
   nextEnv.loadEnvConfig(process.cwd());
   workerLog("worker.starting", "Starting enrichment worker", { workerId, database: resolve(process.env.LISTO_DB_PATH || "data/listo.sqlite") });
   if (!process.env.OPENROUTER_KEY && !process.env.SPOTIFY_REFRESH_TOKEN && !process.env.SPOTIFY_ACCESS_TOKEN) throw new Error("OPENROUTER_KEY is required for item enrichment");
-  const backend = new SQLiteBackend();
+  const backend = new SQLiteBackend(undefined, null);
   workerLog("worker.ready", "Worker ready to process queued items", { workerId });
   await runWorker({
     queue: backend,

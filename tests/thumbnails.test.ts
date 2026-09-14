@@ -1,3 +1,4 @@
+import { accountFixture } from "./account-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -51,17 +52,19 @@ test("does not complete enrichment without a usable thumbnail", async () => {
 
 
 test("serves stored images with cache headers and returns 404 for unknown keys", async (t) => {
+  const fixture = accountFixture(); t.after(() => fixture.close());
   const directory = await mkdtemp(join(tmpdir(), "listo-thumbnail-route-"));
   const previous = process.env.LISTO_THUMBNAIL_DIR;
   process.env.LISTO_THUMBNAIL_DIR = directory;
   t.after(() => { if (previous === undefined) delete process.env.LISTO_THUMBNAIL_DIR; else process.env.LISTO_THUMBNAIL_DIR = previous; });
   try {
     const url = await new FileThumbnailStorage(directory).put(png, "png");
-    const response = await GET(new Request("http://localhost" + url), { params: Promise.resolve({ key: url.split("/").at(-1)! }) });
+    fixture.backend.updateList("inbox", { metadata: { thumbnailUrl: url } });
+    const response = await GET(new Request("http://localhost" + url, { headers: { cookie: fixture.cookie } }), { params: Promise.resolve({ key: url.split("/").at(-1)! }) });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/png");
-    assert.match(response.headers.get("cache-control")!, /immutable/);
+    assert.match(response.headers.get("cache-control")!, /private, no-store/);
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), png);
-    assert.equal((await GET(new Request("http://localhost"), { params: Promise.resolve({ key: "missing" }) })).status, 404);
+    assert.equal((await GET(new Request("http://localhost", { headers: { cookie: fixture.cookie } }), { params: Promise.resolve({ key: "missing" }) })).status, 404);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

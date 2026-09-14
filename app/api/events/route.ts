@@ -1,3 +1,4 @@
+import { requestUser, sameOrigin } from "@/lib/auth/http";
 import { applicationLog } from "@/lib/logging";
 
 export const runtime = "nodejs";
@@ -7,8 +8,8 @@ const descriptions: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
+  if (!requestUser(request)) return new Response(null, { status: 401 });
+  try { sameOrigin(request); } catch { return new Response(null, { status: 403 }); }
   try {
     const body = await request.text();
     if (body.length > 2048) return new Response(null, { status: 413 });

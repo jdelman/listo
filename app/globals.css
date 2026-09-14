@@ -21,6 +21,7 @@ small { font-size: .83rem; }
 .primary:hover:not(:disabled) { background: #333; }
 .danger { border-color: #8d1717; color: #8d1717; }
 .notice { border: 1px solid #111; background: #ffffd8; padding: 10px; position: fixed; z-index: 10; right: 24px; top: 84px; }
+.error-banner { border: 1px solid #8d1717; color: #8d1717; padding: 10px; }
 .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin: 0 0 24px; }
 .page-heading > div:first-child { min-width: 0; }
 .back { margin-bottom: 18px; border: 0; background: transparent; padding-left: 0; }
@@ -61,6 +62,10 @@ dd { margin: 0; }
 .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .markdown { border-left: 3px solid #aaa; padding-left: 12px; }
 .markdown p:empty { min-height: .7rem; margin: 0; }
+.job-status { border-left: 3px solid #777; padding: 5px 8px; background: #f1f1eb; }
+.job-failed { border-color: #8d1717; color: #8d1717; }
+.derived { border-top: 1px solid #aaa; margin-top: 14px; padding-top: 10px; }
+.derived p { margin-bottom: 5px; }
 .measurement { display: grid; grid-template-columns: 2fr 1fr 1fr auto; align-items: end; gap: 8px; margin-bottom: 8px; }
 .search-controls { border: 1px solid #777; padding: 14px; background: #fff; grid-template-columns: 2fr repeat(3, 1fr); align-items: end; }
 .search-controls .wide { grid-column: span 4; }
@@ -98,3 +103,14 @@ dd { margin: 0; }
 .tag-options { position: absolute; top: calc(100% - 20px); left: 0; right: 0; z-index: 5; max-height: 220px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid #777; background: #fff; box-shadow: 0 4px 10px #0002; }
 .tag-options li { padding: 6px 8px; cursor: pointer; overflow-wrap: anywhere; }
 .tag-options li:hover, .tag-options li[aria-selected="true"] { background: #e4e4dc; }
+
+.account-shell { max-width: 640px; padding-top: 48px; }
+.account-panel { margin-top: 24px; padding: 28px; }
+.account-form { display: grid; gap: 18px; margin-bottom: 24px; }
+.account-form label { display: grid; gap: 8px; }
+.account-form p { margin: 0; }
+.account-panel h2 { margin-top: 32px; }
+.account-panel > a { display: inline-block; margin-top: 20px; }
+.account-grant { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid; padding: 16px 0; }
+.account-grant p { margin: 6px 0 0; }
+.masthead nav form { display: inline-flex; }

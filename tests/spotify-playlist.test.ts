@@ -1,9 +1,11 @@
+import { LEGACY_USER_ID } from "../lib/backend/sqlite/accounts-migration";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { openListoDatabase } from "../lib/backend/sqlite/database";
+import RawDatabase from "better-sqlite3";
+import { migrateLegacy, openListoDatabase } from "../lib/backend/sqlite/database";
 import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
 import { spotifyPlaylistId } from "../lib/spotify";
 import { SpotifyPlaylistProcessor } from "../lib/processing/spotify-playlist";
@@ -18,7 +20,7 @@ const json = (data: unknown) => Response.json(data);
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "listo-spotify-"));
   const db = openListoDatabase(join(directory, "test.sqlite"));
-  const backend = new SQLiteBackend(db);
+  const backend = new SQLiteBackend(db, LEGACY_USER_ID);
   const job = backend.createItem({ id: "source", type: "url", title: url, description: "", tags: [], sourceUrl: url, metadata: {}, availability: { external: true, imported: false, localReference: false } }, ["inbox"]);
   return { backend, db, job, close() { db.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
@@ -159,21 +161,21 @@ test("refreshes configured user credentials without exposing them in saved data"
 test("migrates existing lists and preserves playlist metadata through edits and database export", () => {
   const directory = mkdtempSync(join(tmpdir(), "listo-spotify-migration-"));
   const path = join(directory, "test.sqlite");
-  let db = openListoDatabase(path);
+  let db = new RawDatabase(path);
+  migrateLegacy(db);
   try {
-    const backend = new SQLiteBackend(db);
-    backend.updateList("inbox", { title: "My inbox" });
+    db.prepare("INSERT INTO lists(id,title,created_at,updated_at) VALUES ('inbox','My inbox',?,?)").run(new Date().toISOString(),new Date().toISOString());
     // Reconstruct a version-1 database with real preexisting content.
     db.exec("ALTER TABLE lists DROP COLUMN metadata_json; DELETE FROM schema_migrations WHERE version = 2");
     db.close();
     db = openListoDatabase(path);
-    const migrated = new SQLiteBackend(db);
+    const migrated = new SQLiteBackend(db, LEGACY_USER_ID);
     assert.equal(migrated.getDatabase().lists[0].title, "My inbox");
     assert.deepEqual(migrated.getDatabase().lists[0].metadata, {});
     migrated.updateList("inbox", { metadata: { thumbnailUrl: image, sourceUrl: url } });
     migrated.updateList("inbox", { title: "Still here" });
     assert.equal(migrated.getDatabase().lists[0].metadata?.thumbnailUrl, image);
-    assert.equal((db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version, 2);
+    assert.equal((db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version, 4);
   } finally { db.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 

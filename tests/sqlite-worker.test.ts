@@ -1,3 +1,4 @@
+import { LEGACY_USER_ID } from "../lib/backend/sqlite/accounts-migration";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ import { runOne } from "../worker/runner";
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "listo-test-"));
   const database = openListoDatabase(join(directory, "listo.sqlite"));
-  const backend = new SQLiteBackend(database);
+  const backend = new SQLiteBackend(database, LEGACY_USER_ID);
   return {
     backend,
     database,

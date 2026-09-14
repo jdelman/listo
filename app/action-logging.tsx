@@ -5,6 +5,7 @@ import { useEffect } from "react";
 export function ActionLogging() {
   useEffect(() => {
     const send = (action: string, control?: string) => {
+      if (/^\/(login|logout|profile|reset-password|oauth)(\/|$)/.test(window.location.pathname)) return;
       void fetch("/api/events", {
         method: "POST", headers: { "content-type": "application/json" }, keepalive: true,
         body: JSON.stringify({ action, control, path: window.location.pathname }),

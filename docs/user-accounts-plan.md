@@ -1,6 +1,8 @@
 # User accounts and data ownership plan
 
-Status: proposed implementation; no accounts or database records have been changed.
+Status: implemented for the local Node/SQLite app. `jdelman` owns all existing data and the supplied initial credential is configured. Login/logout and the OAuth MCP flow have passed live verification. The separate older Cloudflare Sites deployment is unchanged.
+
+Implementation decisions: keep `inbox` as a per-user API alias over unique database IDs; use OAuth dynamic client registration rather than fetching Client ID Metadata Documents; use operator-generated recovery links. See README.md for rollout and recovery instructions.
 
 ## Scope and defaults
 

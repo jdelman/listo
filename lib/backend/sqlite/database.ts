@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { migrateAccounts, migrateOAuthAudience } from "./accounts-migration";
+import { mkdirSync, chmodSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const defaultPath = join(process.cwd(), "data", "listo.sqlite");
@@ -15,12 +16,24 @@ export function openListoDatabase(path = process.env.LISTO_DB_PATH || defaultPat
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 5000");
-  migrate(db);
+  try {
+    migrateLegacy(db);
+    const version = (db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version;
+    if (version < 3 && path !== ":memory:") {
+      // Unique names permit concurrent web/worker startup without a backup-file race.
+      const backup = `${path}.before-accounts-${process.pid}-${Date.now()}.sqlite`;
+      db.prepare("VACUUM INTO ?").run(backup);
+      chmodSync(backup, 0o600);
+    }
+    migrateAccounts(db);
+    migrateOAuthAudience(db);
+    if (path !== ":memory:") chmodSync(path, 0o600);
+  } catch (error) { db.close(); throw error; }
   databases.set(path, db);
   return db;
 }
 
-function migrate(db: Database.Database) {
+export function migrateLegacy(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
