@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { openListoDatabase } from "../lib/backend/sqlite/database";
 import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
+import { commandSchema } from "../lib/backend/command-schema";
 import type { List } from "../lib/types";
 
 function fixture() {
@@ -55,5 +56,20 @@ test("list and item CRUD, ordering, and multi-list membership remain consistent"
     state = context.backend.getDatabase();
     assert.equal(state.items.some((entry) => entry.id === "first"), false);
     assert.equal(state.jobs.some((entry) => entry.itemId === "first"), false);
+  } finally { context.close(); }
+});
+
+test("grid view is accepted by commands and persisted per list", () => {
+  const context = fixture();
+  try {
+    context.backend.createList(list("grid-list"));
+    context.backend.createList(list("other-list"));
+    const command = commandSchema.parse({ type: "updateList", id: "grid-list", patch: { defaultView: "grid" } });
+    assert.equal(command.type, "updateList");
+    if (command.type !== "updateList") throw new Error("Expected updateList");
+    context.backend.updateList(command.id, command.patch);
+    const state = context.backend.getDatabase();
+    assert.equal(state.lists.find((entry) => entry.id === "grid-list")?.defaultView, "grid");
+    assert.equal(state.lists.find((entry) => entry.id === "other-list")?.defaultView, "list");
   } finally { context.close(); }
 });

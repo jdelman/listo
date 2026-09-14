@@ -1,5 +1,5 @@
 export type ItemType = "note" | "url" | "media" | "pdf" | "image" | "movie" | "clothing";
-export type ViewMode = "list" | "compact" | "gallery" | "playlist" | "document" | "table";
+export type ViewMode = "list" | "grid" | "compact" | "gallery" | "playlist" | "document" | "table";
 
 export type Measurement = { id: string; name: string; value: string | number; unit?: "in" | "cm" };
 
