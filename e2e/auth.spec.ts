@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
-import { E2E_PASSWORD, usernameFor } from "./settings";
+import { E2E_PASSWORD, E2E_PORT, usernameFor } from "./settings";
 
 async function signIn(page: Page, host: string) {
   await page.getByLabel("Username", { exact: true }).fill(usernameFor(host));
@@ -68,4 +69,36 @@ test("a form posted from an unrelated site cannot log the browser in", async ({ 
   expect((await page.context().cookies()).some(cookie => cookie.name === "listo_session")).toBe(false);
   await page.goto(`${baseURL}/profile`);
   await expect(page).toHaveURL(`${baseURL}/login?returnTo=%2Fprofile`);
+});
+
+test("OAuth consent sends a same-origin POST and returns the code to the local client", async ({ page, request, baseURL }, info) => {
+  const callback = `http://127.0.0.1:${E2E_PORT}/test-oauth-callback`;
+  const registration = await request.post("/oauth/register", {
+    data: { client_name: "Local MCP client", redirect_uris: [callback] },
+  });
+  expect(registration.status()).toBe(201);
+  const { client_id } = await registration.json();
+  const params = new URLSearchParams({
+    client_id,
+    redirect_uri: callback,
+    response_type: "code",
+    code_challenge_method: "S256",
+    code_challenge: createHash("sha256").update("test-verifier".repeat(4)).digest("base64url"),
+    resource: `http://localhost:${E2E_PORT}/mcp`,
+    state: "test-state",
+  });
+
+  await page.goto(`/oauth/authorize?${params}`);
+  await signIn(page, info.project.name);
+  await expect(page.getByRole("heading", { name: "Connect Local MCP client?" })).toBeVisible();
+
+  const consent = page.waitForResponse(response => response.url() === `${baseURL}/oauth/consent`);
+  await page.getByRole("button", { name: "Allow access" }).click();
+  const response = await consent;
+  expect((await response.request().allHeaders()).origin).toBe(baseURL);
+  expect(response.status()).toBe(303);
+  const result = new URL((await response.headerValue("location"))!);
+  expect(result.origin + result.pathname).toBe(callback);
+  expect(result.searchParams.get("state")).toBe("test-state");
+  expect(result.searchParams.get("code")).toBeTruthy();
 });

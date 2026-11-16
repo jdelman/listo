@@ -2,7 +2,8 @@ import Link from "next/link";
 import { pageUser, origin } from "@/lib/auth/http";
 import { OAuthService } from "@/lib/auth/oauth";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Connect application — Listo", referrer: "no-referrer" };
+// Keep the Origin on the consent POST and suppress referrers to other origins.
+export const metadata = { title: "Connect application — Listo", referrer: "same-origin" };
 export default async function Authorize({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = new URLSearchParams(Object.entries(await searchParams).filter((pair): pair is [string, string] => typeof pair[1] === "string"));
   const user = await pageUser(`/oauth/authorize?${params}`);
