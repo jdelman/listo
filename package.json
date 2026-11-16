@@ -6,9 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n web,worker \"next dev\" \"npm:worker:dev\"",
+    "dev": "concurrently -k -n web,worker \"next dev --hostname 0.0.0.0\" \"npm:worker:dev\"",
     "build": "next build",
-    "start": "concurrently -k -n web,worker \"next start\" \"npm:worker\"",
+    "start": "concurrently -k -n web,worker \"next start --hostname 0.0.0.0\" \"npm:worker\"",
     "worker": "tsx worker/local-worker.ts",
     "worker:dev": "tsx watch worker/local-worker.ts",
     "test": "node --import tsx --test tests/*.test.ts",
