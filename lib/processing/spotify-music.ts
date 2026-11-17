@@ -130,7 +130,7 @@ export async function enrichSpotifyMusic(
     title: result.name, summary, category: kind, tags,
     specs: {
       spotifyUrl, appleMusicUrl, youtubeUrl, thumbnailUrl: thumbnailUrl ?? item.metadata.thumbnailUrl, year,
-      artist, artists, platform: "spotify", platformId: sourceId, trackName: kind === "track" ? result.name : undefined,
+      title: result.name, artist, artists, platform: "spotify", platformId: sourceId, trackName: kind === "track" ? result.name : undefined,
     },
     attributes: {}, processedAt: new Date().toISOString(), processorVersion: "spotify:v1",
   };

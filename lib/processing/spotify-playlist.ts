@@ -78,7 +78,7 @@ export class SpotifyPlaylistProcessor implements JobProcessor {
           id: trackItemId, type: "media", title: track.name, description: artists.join(", "), tags: [], sourceUrl: url,
           availability: { external: true, localReference: Boolean(thumbnailUrl?.startsWith("/thumbnails/")), imported: true },
           createdAt: timestamp, updatedAt: timestamp, revision: 1,
-          metadata: { trackName: track.name, artist: artists.join(", "), artists, spotifyUrl: url, url, platform: "spotify", platformId: track.id, thumbnailUrl },
+          metadata: { title: track.name, trackName: track.name, artist: artists.join(", "), artists, spotifyUrl: url, url, platform: "spotify", platformId: track.id, thumbnailUrl },
         }, index);
         imported++;
       }

@@ -82,6 +82,8 @@ test("recognizes Spotify share links and enriches a queued track without OpenRou
     assert.equal(backend.getDatabase().jobs[0].status, "completed");
     const item = backend.getItem("song")!;
     assert.equal(item.title, "Song");
+    assert.equal(item.metadata.title, "Song");
+    assert.equal(item.metadata.artist, "The Band");
     assert.equal(item.description, "My description");
     assert.equal(item.metadata.year, 2002);
     assert.equal(item.metadata.thumbnailUrl, "/thumbnails/cover.png");
@@ -111,6 +113,8 @@ test("looks up a named album and completes when optional data is unavailable", a
     availability, createdAt: "", updatedAt: "", revision: 1,
   }, new AbortController().signal);
   assert.equal(result.category, "album");
+  assert.equal(result.specs.title, "Record");
+  assert.equal(result.specs.artist, "The Band");
   assert.equal(result.summary, "Album by The Band, released in 2002.");
   assert.equal(result.specs.spotifyUrl, `https://open.spotify.com/album/${id}`);
   assert.equal(result.specs.youtubeUrl, undefined);

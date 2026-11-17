@@ -16,6 +16,7 @@ export type ItemMetadata = {
   url?: string;
   platform?: "youtube" | "apple_music" | "soundcloud" | "spotify" | "other";
   platformId?: string;
+  title?: string;
   trackName?: string;
   artist?: string;
   artists?: string[];
