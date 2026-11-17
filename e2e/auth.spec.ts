@@ -102,3 +102,47 @@ test("OAuth consent sends a same-origin POST and returns the code to the local c
   expect(result.searchParams.get("state")).toBe("test-state");
   expect(result.searchParams.get("code")).toBeTruthy();
 });
+
+test("item description, Markdown, and Spotify links open in a separate tab", async ({ page, context }, info) => {
+  const spotifyUrl = "https://open.spotify.com/album/46VoobaZCtFPReElOHFEqq";
+  await page.goto("/login");
+  await signIn(page, info.project.name);
+  await expect(page.getByRole("heading", { name: "Lists", exact: true })).toBeVisible();
+
+  const id = await page.evaluate(async ({ spotifyUrl }) => {
+    const id = crypto.randomUUID();
+    const response = await fetch("/api/commands", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "createItem",
+        listIds: ["inbox"],
+        item: {
+          id,
+          type: "media",
+          title: "JuJu",
+          description: "Read the [album notes](https://example.com/notes).",
+          tags: [],
+          availability: { external: false, localReference: false, imported: false },
+          metadata: { markdown: "- Source: https://example.com/source.", spotifyUrl },
+        },
+      }),
+    });
+    if (!response.ok) throw new Error("Test item could not be created");
+    return id;
+  }, { spotifyUrl });
+
+  await page.goto(`/items/${id}`);
+  const notes = page.getByRole("link", { name: "album notes" });
+  await expect(notes).toHaveAttribute("target", "_blank");
+  await expect(page.getByRole("link", { name: "https://example.com/source", exact: true })).toHaveAttribute("target", "_blank");
+  const spotify = page.getByRole("link", { name: "Open in Spotify" });
+  await expect(spotify).toHaveAttribute("href", spotifyUrl);
+  await expect(spotify).toHaveAttribute("target", "_blank");
+
+  await context.route("https://example.com/notes", route => route.fulfill({ body: "Album notes" }));
+  const opened = page.waitForEvent("popup");
+  await notes.click();
+  await expect(await opened).toHaveURL("https://example.com/notes");
+  await expect(page).toHaveURL(new RegExp(`/items/${id}$`));
+});

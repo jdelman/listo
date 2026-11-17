@@ -187,6 +187,8 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     const item = this.getItem(itemId);
     if (!item || item.revision !== inputRevision) return false;
     const metadata = { ...item.metadata, ...derived.specs, derived };
+    const music = derived.category === "album" || derived.category === "track";
+    const description = music && item.description ? item.description : derived.summary;
     const tags = [...item.tags];
     const existingTags = new Set(tags.map((tag) => tag.toLowerCase()));
     for (const tag of derived.tags ?? []) {
@@ -197,7 +199,7 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
       existingTags.add(key);
     }
     const result = this.db.prepare("UPDATE items SET metadata_json = ?, tags_json = ?, updated_at = ?, type = ?, description = ?, title = ? WHERE id = ? AND revision = ?")
-      .run(JSON.stringify(metadata), JSON.stringify(tags), derived.processedAt, derived.category ?? item.type, derived.summary, derived.title?.trim() || item.title, itemId, inputRevision);
+      .run(JSON.stringify(metadata), JSON.stringify(tags), derived.processedAt, derived.category ?? item.type, description, derived.title?.trim() || item.title, itemId, inputRevision);
     return result.changes === 1;
   }
 

@@ -36,8 +36,10 @@ fieldset { border: 1px solid #aaa; padding: 12px; }
 .inline-filter, .destination { display: grid; grid-template-columns: max-content minmax(140px, 260px); align-items: center; gap: 10px; margin-bottom: 18px; }
 .destination { margin: 18px 0; }
 .list-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.list-tile { text-align: left; min-height: 165px; display: grid; align-content: start; gap: 10px; padding: 16px; background: #fff; overflow-wrap: anywhere; }
+.list-tile { position: relative; border: 1px solid #999; text-align: left; min-height: 165px; display: grid; align-content: start; gap: 10px; padding: 16px; background: #fff; overflow-wrap: anywhere; }
 .list-tile strong { font-size: 1.35rem; }
+.list-tile .title-button::after { content: ""; position: absolute; inset: 0; }
+.list-tile a { position: relative; z-index: 1; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .tags span { border: 1px solid #999; border-radius: 999px; background: #f1f1eb; padding: 2px 9px; font-size: .85rem; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; border-block: 1px solid #aaa; padding: 12px 0; margin-bottom: 18px; }

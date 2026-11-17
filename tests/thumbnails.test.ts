@@ -47,7 +47,7 @@ for (const brokenMetadata of [false, true]) test(`uses ${brokenMetadata ? "LLM f
 });
 
 test("does not complete enrichment without a usable thumbnail", async () => {
-  await assert.rejects(new ItemEnrichmentProcessor({ apiKey: "test", fetch: async () => completion(enrichment({ thumbnailUrl: null })) }).process({ ...item, type: "note", sourceUrl: undefined }, new AbortController().signal), /No usable thumbnail/);
+  await assert.rejects(new ItemEnrichmentProcessor({ apiKey: "test", fetch: async () => completion(enrichment({ thumbnailUrl: null })) }).process({ ...item, type: "image", sourceUrl: undefined }, new AbortController().signal), /No usable thumbnail/);
 });
 
 

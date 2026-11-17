@@ -124,3 +124,23 @@ test("leaves enrichment unsaved when an access block has no usable alternate sou
     /no usable alternate source/,
   );
 });
+
+test("finds a Spotify album for a music note and saves enrichment without cover art", async () => {
+  const spotifyUrl = "https://open.spotify.com/album/46VoobaZCtFPReElOHFEqq";
+  const fetcher: typeof fetch = async (url, init) => {
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(init?.body));
+    if (!body.tools) return completion(enrichment({ category: "album", thumbnailUrl: null }));
+    assert.deepEqual(body.tools[0].parameters.allowed_domains, ["open.spotify.com"]);
+    assert.match(body.messages[0].content, /album/);
+    return Response.json({ choices: [{ message: { content: spotifyUrl, annotations: [
+      { type: "url_citation", url_citation: { url: "https://open.spotify.com/track/3QroYcCSekAcQQzHk4fEcL", content: "Juju, a song by Wayne Shorter" } },
+      { type: "url_citation", url_citation: { url: spotifyUrl, content: "JuJu, an album by Wayne Shorter", uncited: true } },
+    ] } }] });
+  };
+  const result = await new ItemEnrichmentProcessor({ apiKey: "test", fetch: fetcher })
+    .process({ ...baseItem, title: "Wayne Shorter - Juju" }, new AbortController().signal);
+  assert.equal(result.specs.spotifyUrl, spotifyUrl);
+  assert.equal(result.category, "album");
+  assert.equal(result.specs.thumbnailUrl, undefined);
+});
