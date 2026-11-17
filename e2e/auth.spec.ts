@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
 import { ITEM_LABELS, ITEM_TYPES } from "../lib/types";
 import { E2E_PASSWORD, E2E_PORT, usernameFor } from "./settings";
@@ -74,7 +74,8 @@ test("a form posted from an unrelated site cannot log the browser in", async ({ 
 
 test("OAuth consent sends a same-origin POST and returns the code to the local client", async ({ page, request, baseURL }, info) => {
   const callback = `http://127.0.0.1:${E2E_PORT}/test-oauth-callback`;
-  const registration = await request.post("/oauth/register", {
+  // The API request fixture uses system DNS. Chromium maps the test hostnames separately.
+  const registration = await request.post(`http://127.0.0.1:${E2E_PORT}/oauth/register`, {
     data: { client_name: "Local MCP client", redirect_uris: [callback] },
   });
   expect(registration.status()).toBe(201);
@@ -110,8 +111,8 @@ test("item description, Markdown, and Spotify links open in a separate tab", asy
   await signIn(page, info.project.name);
   await expect(page.getByRole("heading", { name: "Lists", exact: true })).toBeVisible();
 
-  const id = await page.evaluate(async ({ spotifyUrl }) => {
-    const id = crypto.randomUUID();
+  const id = randomUUID();
+  await page.evaluate(async ({ id, spotifyUrl }) => {
     const response = await fetch("/api/commands", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -130,8 +131,7 @@ test("item description, Markdown, and Spotify links open in a separate tab", asy
       }),
     });
     if (!response.ok) throw new Error("Test item could not be created");
-    return id;
-  }, { spotifyUrl });
+  }, { id, spotifyUrl });
 
   await page.goto(`/items/${id}`);
   const notes = page.getByRole("link", { name: "album notes" });
