@@ -18,7 +18,8 @@ symlinkSync(resolve("node_modules"), join(appDirectory, "node_modules"), "dir");
 const accounts = new Accounts(openListoDatabase(database));
 for (const host of E2E_HOSTS) await accounts.create(usernameFor(host), E2E_PASSWORD);
 accounts.db.close();
-const child = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), "dev", "--webpack", "--hostname", "0.0.0.0", "--port", String(E2E_PORT)], {
+const child = spawn(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev:web", "--", "--port", String(E2E_PORT)], {
+  shell: process.platform === "win32",
   cwd: appDirectory,
   stdio: "inherit",
   env: { ...process.env, LISTO_DB_PATH: database, LISTO_ORIGIN: `http://localhost:${E2E_PORT}`, LISTO_LOG_DIR: join(directory, "logs"), LISTO_THUMBNAIL_DIR: join(directory, "thumbnails"), SPOTIFY_CLIENT_ID: "browser-test-client", SPOTIFY_CLIENT_SECRET: "browser-test-secret" },

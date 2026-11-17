@@ -6,7 +6,8 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n web,worker \"next dev --hostname 0.0.0.0\" \"npm:worker:dev\"",
+    "dev": "concurrently -k -n web,worker \"npm:dev:web\" \"npm:worker:dev\"",
+    "dev:web": "next dev --webpack --hostname 0.0.0.0",
     "build": "next build",
     "start": "concurrently -k -n web,worker \"next start --hostname 0.0.0.0\" \"npm:worker\"",
     "worker": "tsx worker/local-worker.ts",
