@@ -172,3 +172,53 @@ test("an uploaded item image is kept out of the enrichment request", async () =>
   }, new AbortController().signal);
   assert.equal(result.category, "image");
 });
+
+test("uses Chrome first on eBay and feeds the rendered listing to enrichment", async () => {
+  const sourceUrl = "https://www.ebay.com/itm/123";
+  const signal = new AbortController().signal;
+  const result = await new ItemEnrichmentProcessor({
+    apiKey: "test",
+    readVisiblePage: async (url, domain, receivedSignal) => {
+      assert.equal(url, sourceUrl);
+      assert.equal(domain, "ebay.com");
+      assert.equal(receivedSignal, signal);
+      return {
+        url: sourceUrl,
+        html: '<title>Vintage watch</title><script type="application/ld+json">{"price":25}</script>',
+      };
+    },
+    fetch: async (url, init) => {
+      assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+      const { messages } = JSON.parse(String(init?.body));
+      assert.match(JSON.parse(messages[1].content).pageContent, /Vintage watch.*"price":25/);
+      return completion(enrichment({ thumbnailUrl: null }));
+    },
+  }).process({ ...baseItem, type: "url", sourceUrl }, signal);
+  assert.equal(result.title, "Vintage watch");
+});
+
+test("uses the existing HTTP path when Chrome fails or the domain is unlisted", async () => {
+  for (const [sourceUrl, expectedCalls] of [
+    ["https://www.ebay.com/itm/123", ["chrome", "http", "model"]],
+    ["https://ebay.com.example/itm/123", ["http", "model"]],
+  ] as const) {
+    const calls: string[] = [];
+    const result = await new ItemEnrichmentProcessor({
+      apiKey: "test",
+      readVisiblePage: async () => {
+        calls.push("chrome");
+        throw new Error("Chrome unavailable");
+      },
+      fetch: async (url) => {
+        if (url === sourceUrl) {
+          calls.push("http");
+          return new Response("<title>HTTP listing</title>");
+        }
+        calls.push("model");
+        return completion(enrichment({ thumbnailUrl: null }));
+      },
+    }).process({ ...baseItem, type: "url", sourceUrl }, new AbortController().signal);
+    assert.deepEqual(calls, expectedCalls);
+    assert.equal(result.title, "HTTP listing");
+  }
+});

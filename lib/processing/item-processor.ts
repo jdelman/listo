@@ -8,11 +8,12 @@ import { uid, type Item, type ItemMetadata } from "../types";
 import { enrichSpotifyMusic } from "./spotify-music";
 import { enrichmentSchema, enrichmentJsonSchema } from "./enrichment-schema";
 import { findWebSources, isBlockedPage } from "./alternate-sources";
+import { visibleChromeDomain, type ReadVisiblePage } from "./visible-chrome";
 
 export class ItemEnrichmentProcessor implements JobProcessor {
   readonly kind = "process-item" as const;
 
-  constructor(private readonly options: { apiKey?: string; model?: string; spotifyAccessToken?: string; youtubeApiKey?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void; debug?: Logger } = {}) {}
+  constructor(private readonly options: { apiKey?: string; model?: string; spotifyAccessToken?: string; youtubeApiKey?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; readVisiblePage?: ReadVisiblePage; onEvent?: (description: string, fields?: LogFields) => void; debug?: Logger } = {}) {}
 
   async process(item: Item, signal: AbortSignal) {
     const debug: Logger | undefined = this.options.debug && ((event, description, fields) =>
@@ -62,40 +63,57 @@ export class ItemEnrichmentProcessor implements JobProcessor {
 
     if (sourceUrl && !["pdf", "image"].includes(item.type)) {
       this.options.onEvent?.("Fetching item source page", { event: "enrichment.source_started", itemId: item.id, sourceHost: new URL(sourceUrl).hostname });
-      const response = await request(sourceUrl, {
+      const chromeDomain = visibleChromeDomain(new URL(sourceUrl));
+      let renderedPage: Awaited<ReturnType<ReadVisiblePage>> | undefined;
+      if (chromeDomain && this.options.readVisiblePage) {
+        const fields = { itemId: item.id, sourceHost: attributes.sourceHost };
+        this.options.onEvent?.("Opening source in visible Chrome", { ...fields, event: "enrichment.chrome_started" });
+        try {
+          renderedPage = await this.options.readVisiblePage(sourceUrl, chromeDomain, signal);
+          this.options.onEvent?.("Read source in visible Chrome", { ...fields, event: "enrichment.chrome_completed" });
+        } catch (error) {
+          signal.throwIfAborted();
+          this.options.onEvent?.("Visible Chrome could not read source; trying HTTP", {
+            ...fields, event: "enrichment.chrome_fallback", reason: safeError(error),
+          });
+        }
+      }
+      const response = renderedPage ? undefined : await request(sourceUrl, {
         signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
         headers: { "user-agent": "Listo/0.2 metadata worker" },
       });
-      const contentType = response.headers.get("content-type") || "text/html";
+      const contentType = response?.headers.get("content-type") || "text/html";
       const isText = /text\/|application\/(json|ld\+json|xhtml\+xml)/i.test(contentType);
-      const html = isText ? await response.text() : "";
+      const html = renderedPage?.html ?? (isText ? await response?.text() ?? "" : "");
+      const finalUrl = renderedPage?.url || response?.url || sourceUrl;
       const title = matchHtml(html, /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
       const text = stripHtml(html);
-      const blocked = isBlockedPage(response, title, text);
+      const blocked = response ? isBlockedPage(response, title, text) : false;
       debug?.("enrichment.source_response", "Received item source response", {
-        status: response.status,
-        finalUrl: safeError((response.url || sourceUrl).split(/[?#]/, 1)[0]),
-        redirected: response.redirected,
+        method: renderedPage ? "chrome" : "http",
+        status: response?.status,
+        finalUrl: safeError(finalUrl.split(/[?#]/, 1)[0]),
+        redirected: response?.redirected ?? finalUrl !== sourceUrl,
         contentType,
-        cloudflareChallenge: response.headers.get("cf-mitigated") === "challenge",
+        cloudflareChallenge: response?.headers.get("cf-mitigated") === "challenge",
         blocked,
         title: safeError(title),
         characters: html.length,
         textPreview: safeError(text),
       });
       if (blocked) {
-        const blockedHosts = [...new Set([sourceUrl, response.url || sourceUrl].map(url => new URL(url).hostname.replace(/^www\./, "")))];
-        this.options.onEvent?.("Source blocked enrichment; searching other sites", { event: "enrichment.source_blocked", itemId: item.id, sourceHost: blockedHosts.at(-1), status: response.status });
+        const blockedHosts = [...new Set([sourceUrl, finalUrl].map(url => new URL(url).hostname.replace(/^www\./, "")))];
+        this.options.onEvent?.("Source blocked enrichment; searching other sites", { event: "enrichment.source_blocked", itemId: item.id, sourceHost: blockedHosts.at(-1), status: response?.status });
         const sources = await findWebSources(item.metadata.name || item.title, { request, apiKey, model, signal, blockedHosts, debug });
         if (!sources.length) throw new Error("Source blocked enrichment and no usable alternate source was found");
         alternateSources = sources.map(source => source.url);
         sourceText = sources.map(source => `${source.url}\n${source.text}`).join("\n\n");
         this.options.onEvent?.("Found alternate enrichment sources", { event: "enrichment.alternate_sources", itemId: item.id, sourceHosts: [...new Set(alternateSources.map(url => new URL(url).hostname))] });
       } else {
-        if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
+        if (response && !response.ok) throw new Error(`Source returned HTTP ${response.status}`);
         if (!isText) throw new Error("Source is not a supported text page");
-        this.options.onEvent?.("Fetched item source page", { event: "enrichment.source_completed", itemId: item.id, status: response.status, characters: html.length });
-        if (!thumbnailUrl) await tryImages(metadataImages(html, response.url || sourceUrl));
+        this.options.onEvent?.("Fetched item source page", { event: "enrichment.source_completed", itemId: item.id, status: response?.status, characters: html.length });
+        if (!thumbnailUrl) await tryImages(metadataImages(html, finalUrl));
         pageTitle = title || undefined;
         const description = matchHtml(html, /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["']/i)
           || matchHtml(html, /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description)["']/i);

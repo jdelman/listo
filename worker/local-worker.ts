@@ -6,6 +6,7 @@ import { SpotifyPlaylistProcessor } from "../lib/processing/spotify-playlist";
 import { ItemEnrichmentProcessor } from "../lib/processing/item-processor";
 import { debugLoggingEnabled, workerLog, safeError } from "../lib/logging";
 import { runWorker } from "./runner";
+import { readVisiblePage } from "./visible-chrome";
 
 const controller = new AbortController();
 const workerId = `${hostname()}:${process.pid}`;
@@ -30,6 +31,7 @@ try {
     processors: [
       new SpotifyPlaylistProcessor(backend),
       new ItemEnrichmentProcessor({
+        readVisiblePage,
         onEvent: (description, fields) => workerLog(String(fields?.event || "enrichment.progress"), description, fields),
         debug: debugLoggingEnabled() ? (event, description, fields) => workerLog(event, description, fields, "debug") : undefined,
       }),
