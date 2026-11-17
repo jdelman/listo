@@ -200,3 +200,55 @@ test("Spotify Connect starts consent and returns to the initiating Profile", asy
   await expect(page).toHaveURL(`${baseURL}/profile?spotify=denied`);
   await expect(connect).toBeVisible();
 });
+
+test("every item type offers an image field and PDF attachments keep their accompanying image", async ({ page }, info) => {
+  await page.goto("/add");
+  await signIn(page, info.project.name);
+  const types = page.getByRole("group", { name: "Item type" });
+  const image = page.getByLabel("Image (optional)", { exact: true }).filter({ visible: true });
+  for (const type of ITEM_TYPES) {
+    const choice = types.getByRole("button", { name: ITEM_LABELS[type], exact: true });
+    await choice.click();
+    await expect(choice).toHaveAttribute("aria-current", "page");
+    await expect(image).toBeVisible();
+  }
+  const pdfType = types.getByRole("button", { name: "PDF", exact: true });
+  await pdfType.click();
+  await expect(pdfType).toHaveAttribute("aria-current", "page");
+  const pdf = Buffer.from("%PDF-1.4\n%%EOF");
+  const picture = (name: string, color: string) => ({
+    name, mimeType: "image/svg+xml",
+    buffer: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${color}"/></svg>`),
+  });
+  const first = picture("first.svg", "red");
+  const replacement = picture("replacement.svg", "blue");
+  const dataUrl = (file: ReturnType<typeof picture>) => `data:${file.mimeType};base64,${file.buffer.toString("base64")}`;
+  await page.getByLabel("File", { exact: true }).setInputFiles({ name: "source.pdf", mimeType: "application/pdf", buffer: pdf });
+  await image.setInputFiles(first);
+  const save = async (button: string, command: string) => {
+    const response = page.waitForResponse(res => new URL(res.url()).pathname === "/api/commands" &&
+      res.request().method() === "POST" && res.request().postDataJSON().type === command);
+    await page.getByRole("button", { name: button, exact: true }).click();
+    expect((await response).ok()).toBe(true);
+  };
+  await save("Save item", "createItem");
+  await page.getByRole("button", { name: "source.pdf", exact: true }).click();
+  const preview = page.getByRole("img", { name: "source.pdf" });
+  const attachment = page.getByRole("link", { name: "Open source.pdf" });
+  await expect(preview).toHaveAttribute("src", dataUrl(first));
+  await expect(attachment).toHaveAttribute("href", `data:application/pdf;base64,${pdf.toString("base64")}`);
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await image.setInputFiles(replacement);
+  await save("Save changes", "updateItem");
+  await expect(attachment).toBeVisible();
+  await page.reload();
+  await expect(preview).toHaveAttribute("src", dataUrl(replacement));
+  await expect(attachment).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Remove uploaded image").check();
+  await save("Save changes", "updateItem");
+  await expect(preview).toHaveCount(0);
+  await expect(attachment).toBeVisible();
+});

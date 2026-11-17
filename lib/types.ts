@@ -6,6 +6,7 @@ export type Measurement = { id: string; name: string; value: string | number; un
 
 export type ItemMetadata = {
   thumbnailUrl?: string;
+  imageDataUrl?: string;
   price?: number;
   currency?: string;
   brand?: string;

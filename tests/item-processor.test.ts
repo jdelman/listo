@@ -144,3 +144,21 @@ test("finds a Spotify album for a music note and saves enrichment without cover 
   assert.equal(result.category, "album");
   assert.equal(result.specs.thumbnailUrl, undefined);
 });
+
+test("an uploaded item image is kept out of the enrichment request", async () => {
+  const processor = new ItemEnrichmentProcessor({
+    apiKey: "test",
+    fetch: async (url, init) => {
+      assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+      const body = JSON.parse(String(init?.body));
+      const input = JSON.parse(body.messages[1].content);
+      assert.equal(input.needsThumbnail, false);
+      assert.equal(input.item.metadata.imageDataUrl, undefined);
+      return completion(enrichment({ category: "image" }));
+    },
+  });
+  const result = await processor.process({
+    ...baseItem, type: "image", metadata: { imageDataUrl: "data:image/png;base64,iVBORw0KGgo=" },
+  }, new AbortController().signal);
+  assert.equal(result.category, "image");
+});
