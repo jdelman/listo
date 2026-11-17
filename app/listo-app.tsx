@@ -169,6 +169,7 @@ function QuickAdd({ store, screen, navigate, afterSave }: { store: ReturnType<ty
   }
 
   return <section className="narrow"><div className="page-heading"><div><h1>Quick Add</h1><p>Save first. Organize when you want to.</p></div></div>
+    <label className="destination">Save to<select value={destination} onChange={(event) => { setDestination(event.target.value); navigate({ ...screen, destinationListId: event.target.value }, true); }}>{store.db.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label>
     <div className="tabs" role="group" aria-label="Item type">
       <button aria-current={kind === "quick" ? "page" : undefined} onClick={() => navigate({ ...screen, kind: "quick" })}>Auto-detect</button>
       {ITEM_TYPES.map((type) => <button key={type} aria-current={kind === type ? "page" : undefined} onClick={() => navigate({ ...screen, kind: type })}>{ITEM_LABELS[type]}</button>)}
@@ -189,7 +190,6 @@ function QuickAdd({ store, screen, navigate, afterSave }: { store: ReturnType<ty
       <button className="primary" type="submit">Save clothing</button>
     </form>}
     {kind === "movie" && <form className="panel form-grid" onSubmit={saveMovie}><label>Title<input name="title" required /></label><label>Year<input name="year" inputMode="numeric" /></label><label>TMDB ID <small>(optional)</small><input name="tmdbId" inputMode="numeric" /></label><TagInput options={tagOptions(store)} /><label className="full">Notes<textarea name="description" rows={3} /></label><p className="full"><a href="https://www.themoviedb.org/search/movie" target="_blank" rel="noreferrer">Search TMDB for the ID ↗</a></p><button className="primary">Save movie</button></form>}
-    <label className="destination">Save to<select value={destination} onChange={(event) => { setDestination(event.target.value); navigate({ ...screen, destinationListId: event.target.value }, true); }}>{store.db.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label>
   </section>;
 }
 
