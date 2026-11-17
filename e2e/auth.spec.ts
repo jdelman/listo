@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { test, expect, type Page } from "@playwright/test";
+import { ITEM_LABELS, ITEM_TYPES } from "../lib/types";
 import { E2E_PASSWORD, E2E_PORT, usernameFor } from "./settings";
 
 async function signIn(page: Page, host: string) {
@@ -145,4 +146,26 @@ test("item description, Markdown, and Spotify links open in a separate tab", asy
   await notes.click();
   await expect(await opened).toHaveURL("https://example.com/notes");
   await expect(page).toHaveURL(new RegExp(`/items/${id}$`));
+});
+
+
+test("Add an item exposes every registered type and saves a track to the current list", async ({ page }, info) => {
+  await page.goto("/inbox");
+  await signIn(page, info.project.name);
+  await page.getByRole("button", { name: "Add an item", exact: true }).click();
+  const types = page.getByRole("group", { name: "Item type" });
+  await expect(types.getByRole("button")).toHaveText(["Auto-detect", ...ITEM_TYPES.map(type => ITEM_LABELS[type])]);
+
+  await types.getByRole("button", { name: "Album", exact: true }).click();
+  await expect(types.getByRole("button", { name: "Album", exact: true })).toHaveAttribute("aria-current", "page");
+  await types.getByRole("button", { name: "Movie", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save movie" })).toBeVisible();
+  await types.getByRole("button", { name: "Track", exact: true }).click();
+  await page.getByLabel("Spotify link or title and artist").fill("Browser test track");
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === "/api/commands" && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Save item", exact: true }).click();
+  expect((await saved).status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
+  const item = page.getByRole("article").filter({ hasText: "Browser test track" });
+  await expect(item).toContainText("Track");
 });

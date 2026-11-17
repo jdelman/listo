@@ -1,4 +1,6 @@
-export type QuickAddKind = "quick" | "clothing" | "movie";
+import { ITEM_TYPES, type ItemType } from "./types";
+
+export type QuickAddKind = "quick" | ItemType;
 
 export type Screen =
   | { name: "lists"; tag?: string; creating?: boolean }
@@ -60,7 +62,7 @@ export function screenFromUrl(pathname: string, params = new URLSearchParams()):
     return {
       name: "quick",
       destinationListId: optional(params, "list"),
-      kind: mode === "clothing" || mode === "movie" ? mode : "quick",
+      kind: ITEM_TYPES.find((type) => type === mode) ?? "quick",
     };
   }
 

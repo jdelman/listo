@@ -9,7 +9,7 @@ import { textLinks } from "@/lib/links";
 import { Screen, screenFromUrl, urlForScreen } from "@/lib/routes";
 import { spotifyMusicUrl } from "@/lib/spotify";
 import { useListoStore } from "@/lib/store";
-import { ITEM_LABELS, MEASUREMENT_PRESETS, Item, ItemType, List, Measurement, ProcessingJob, splitTags, uid } from "@/lib/types";
+import { ITEM_LABELS, ITEM_TYPES, MEASUREMENT_PRESETS, Item, List, Measurement, ProcessingJob, splitTags, uid } from "@/lib/types";
 
 import { usePageTitle } from "@/app/components/use-page-title";
 import { TagInput } from "@/app/components/tag-input";
@@ -137,17 +137,17 @@ function ListScreen({ store, screen, navigate, flash }: { store: ReturnType<type
 function QuickAdd({ store, screen, navigate, afterSave }: { store: ReturnType<typeof useListoStore>; screen: Extract<Screen, { name: "quick" }>; navigate: Navigate; afterSave: (listId: string) => void }) {
   const kind = screen.kind ?? "quick";
   const [input, setInput] = useState("");
-  const [override, setOverride] = useState<ItemType | "auto">("auto");
   const [destination, setDestination] = useState(screen.destinationListId ?? "inbox");
   const [file, setFile] = useState<File | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([{ id: uid(), name: "chest", value: "", unit: "in" }]);
-  const detected = override === "auto" ? classify(input, file) : override;
+  const type = kind === "quick" ? classify(input, file) : kind;
+  const usesGenericForm = kind !== "clothing" && kind !== "movie";
+  const music = kind === "album" || kind === "track";
 
   async function saveQuick(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     let dataUrl: string | undefined;
     if (file) dataUrl = await readFile(file);
-    const type = detected;
     const url = /^https?:\/\//i.test(input.trim()) ? input.trim() : undefined;
     const platform = type === "media" ? mediaPlatform(input) : undefined;
     const platformId = platform === "youtube" ? youtubeId(input) : undefined;
@@ -169,13 +169,20 @@ function QuickAdd({ store, screen, navigate, afterSave }: { store: ReturnType<ty
   }
 
   return <section className="narrow"><div className="page-heading"><div><h1>Quick Add</h1><p>Save first. Organize when you want to.</p></div></div>
-    <div className="tabs"><button aria-current={kind === "quick" ? "page" : undefined} onClick={() => navigate({ ...screen, kind: "quick" })}>Text, URL, or file</button><button aria-current={kind === "clothing" ? "page" : undefined} onClick={() => navigate({ ...screen, kind: "clothing" })}>Clothing</button><button aria-current={kind === "movie" ? "page" : undefined} onClick={() => navigate({ ...screen, kind: "movie" })}>Movie</button></div>
-    {kind === "quick" && <form className="panel form-grid" onSubmit={saveQuick}>
-      <label className="full">Paste a URL, type a note, or name something<textarea autoFocus onFocus={(event) => event.currentTarget.select()} rows={7} value={input} onChange={(event) => setInput(event.target.value)} placeholder="Paste URL, type a note, or drop a file…" /></label>
-      <label>File<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
-      <label>Type<select value={override} onChange={(event) => setOverride(event.target.value as ItemType | "auto")}><option value="auto">Auto-detect</option>{Object.entries(ITEM_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-      <p className="full">Detected as: <strong>{ITEM_LABELS[detected]}</strong></p><button className="primary" type="submit" disabled={!input.trim() && !file}>Save item</button>
-    </form>}
+    <div className="tabs" role="group" aria-label="Item type">
+      <button aria-current={kind === "quick" ? "page" : undefined} onClick={() => navigate({ ...screen, kind: "quick" })}>Auto-detect</button>
+      {ITEM_TYPES.map((type) => <button key={type} aria-current={kind === type ? "page" : undefined} onClick={() => navigate({ ...screen, kind: type })}>{ITEM_LABELS[type]}</button>)}
+    </div>
+    <div hidden={!usesGenericForm}>
+      <form className="panel form-grid" onSubmit={saveQuick}>
+        <label className="full">{music ? "Spotify link or title and artist" : "Paste a URL, type a note, or name something"}
+          <textarea autoFocus={usesGenericForm} onFocus={(event) => event.currentTarget.select()} rows={7} value={input} onChange={(event) => setInput(event.target.value)} />
+        </label>
+        <label>File<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        {kind === "quick" && <p className="full">Detected as <strong>{ITEM_LABELS[type]}</strong></p>}
+        <button className="primary" type="submit" disabled={!input.trim() && !file}>Save item</button>
+      </form>
+    </div>
     {kind === "clothing" && <form className="panel form-grid" onSubmit={saveClothing}>
       <label>Name<input name="name" required /></label><label>Size <small>(freeform)</small><input name="size" placeholder="40R" /></label><label>Photograph<input name="photo" type="file" accept="image/*" /></label><TagInput options={tagOptions(store)} /><label className="full">Notes<textarea name="description" rows={3} /></label>
       <fieldset className="full"><legend>Measurements</legend>{measurements.map((measurement, index) => <div className="measurement" key={measurement.id}><label>Name<input list="measurement-presets" value={measurement.name} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, name: event.target.value } : value))} /></label><label>Value<input value={measurement.value} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, value: event.target.value } : value))} /></label><label>Unit<select value={measurement.unit ?? ""} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, unit: (event.target.value || undefined) as Measurement["unit"] } : value))}><option value="">None</option><option value="in">in</option><option value="cm">cm</option></select></label><button type="button" onClick={() => setMeasurements((all) => all.filter((_, i) => i !== index))}>Remove</button></div>)}<datalist id="measurement-presets">{MEASUREMENT_PRESETS.map((name) => <option key={name}>{name}</option>)}</datalist><button type="button" onClick={() => setMeasurements((all) => [...all, { id: uid(), name: "", value: "", unit: "in" }])}>Add measurement</button></fieldset>
