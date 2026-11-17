@@ -1,13 +1,14 @@
 * { box-sizing: border-box; }
 :root { color-scheme: light; }
 html { background: #f7f7f3; color: #111; }
-body { margin: 0; font-family: "Times New Roman", Times, serif; font-size: 17px; line-height: 1.35; }
+body { margin: 0; font-family: "akzidenz-grotesk-next-conden", sans-serif; font-weight: 400; font-style: normal; font-size: 17px; line-height: 1.35; }
 button, input, textarea, select { font: inherit; color: inherit; }
 button, input, textarea, select { border: 1px solid #777; border-radius: 0; background: #fff; padding: .45rem .6rem; }
 button { cursor: pointer; }
 button:hover:not(:disabled), button[aria-current="page"] { background: #e4e4dc; }
 button:disabled { cursor: not-allowed; opacity: .4; }
 a { color: #17458b; overflow-wrap: anywhere; }
+h1, h2, h3, h4, h5, h6 { font-family: "akzidenz-grotesk-next-extend", sans-serif; font-weight: 700; font-style: normal; }
 h1 { font-size: clamp(2rem, 6vw, 3.2rem); line-height: 1; margin: 0 0 .5rem; }
 h2 { font-size: 1.35rem; margin: .2rem 0 .75rem; }
 h3, h4 { margin: .75rem 0 .35rem; }
