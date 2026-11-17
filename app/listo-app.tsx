@@ -10,7 +10,7 @@ import { textLinks } from "@/lib/links";
 import { Screen, screenFromUrl, urlForScreen } from "@/lib/routes";
 import { spotifyMusicUrl } from "@/lib/spotify";
 import { useListoStore } from "@/lib/store";
-import { ITEM_LABELS, ITEM_TYPES, MEASUREMENT_PRESETS, Item, List, Measurement, ProcessingJob, splitTags, uid } from "@/lib/types";
+import { ITEM_LABELS, ITEM_TYPES, MEASUREMENT_PRESETS, Item, ItemMetadata, List, Measurement, ProcessingJob, splitTags, uid } from "@/lib/types";
 
 import { usePageTitle } from "@/app/components/use-page-title";
 import { TagInput } from "@/app/components/tag-input";
@@ -174,7 +174,7 @@ function QuickAdd({ store, screen, navigate, afterSave, flash }: { store: Return
     store.createItem({
       type: "clothing", title: String(form.get("name")), description: String(form.get("description")), tags: splitTags(String(form.get("tags"))),
       availability: { external: false, localReference: false, imported: Boolean(imageDataUrl) },
-      metadata: { name: String(form.get("name")), size: String(form.get("size")), measurements: valid, imageDataUrl, fileName: imageDataUrl && photo instanceof File ? photo.name : undefined },
+      metadata: { name: String(form.get("name")), size: String(form.get("size")), ...readClothingPrice(form), measurements: valid, imageDataUrl, fileName: imageDataUrl && photo instanceof File ? photo.name : undefined },
     }, [destination]);
     afterSave(destination);
   }
@@ -213,7 +213,7 @@ function QuickAdd({ store, screen, navigate, afterSave, flash }: { store: Return
       </form>
     </div>
     {kind === "clothing" && <form className="panel form-grid" onSubmit={saveClothing}>
-      <label>Name<input name="name" required /></label><label>Size <small>(freeform)</small><input name="size" placeholder="40R" /></label><ImageField /><TagInput options={tagOptions(store)} /><label className="full">Notes<textarea name="description" rows={3} /></label>
+      <label>Name<input name="name" required /></label><label>Size <small>(freeform)</small><input name="size" placeholder="40R" /></label><ClothingPriceFields /><ImageField /><TagInput options={tagOptions(store)} /><label className="full">Notes<textarea name="description" rows={3} /></label>
       <fieldset className="full"><legend>Measurements</legend>{measurements.map((measurement, index) => <div className="measurement" key={measurement.id}><label>Name<input list="measurement-presets" value={measurement.name} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, name: event.target.value } : value))} /></label><label>Value<input value={measurement.value} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, value: event.target.value } : value))} /></label><label>Unit<select value={measurement.unit ?? ""} onChange={(event) => setMeasurements((all) => all.map((value, i) => i === index ? { ...value, unit: (event.target.value || undefined) as Measurement["unit"] } : value))}><option value="">None</option><option value="in">in</option><option value="cm">cm</option></select></label><button type="button" onClick={() => setMeasurements((all) => all.filter((_, i) => i !== index))}>Remove</button></div>)}<datalist id="measurement-presets">{MEASUREMENT_PRESETS.map((name) => <option key={name}>{name}</option>)}</datalist><button type="button" onClick={() => setMeasurements((all) => [...all, { id: uid(), name: "", value: "", unit: "in" }])}>Add measurement</button></fieldset>
       <button className="primary" type="submit">Save clothing</button>
     </form>}
@@ -248,7 +248,10 @@ function ItemScreen({ store, screen, navigate, navigateUrl, flash }: { store: Re
     if (imageDataUrl) metadata.imageDataUrl = imageDataUrl;
     else if (form.has("removeImage")) delete metadata.imageDataUrl;
     if (form.has("markdown")) metadata.markdown = String(form.get("markdown"));
-    if (activeItem.type === "clothing") metadata.size = String(form.get("size"));
+    if (activeItem.type === "clothing") {
+      metadata.size = String(form.get("size"));
+      Object.assign(metadata, readClothingPrice(form));
+    }
     const availability = { ...activeItem.availability };
     if (activeItem.type === "image" || activeItem.type === "clothing") {
       if (imageDataUrl) availability.imported = true;
@@ -262,7 +265,7 @@ function ItemScreen({ store, screen, navigate, navigateUrl, flash }: { store: Re
     flash("Item updated.");
   }
   return <section className="narrow"><button className="back" onClick={() => navigateUrl(screen.returnTo || "/lists")}>← Back</button><div className="page-heading"><div><small>{ITEM_LABELS[item.type]}</small><h1>{item.title}</h1></div><div className="actions"><button onClick={() => navigate({ ...screen, editing: !editing })}>{editing ? "Cancel editing" : "Edit"}</button><button className="danger" onClick={() => { if (confirm("Delete this item everywhere?")) { store.deleteItem(item.id); navigate({ name: "lists" }); } }}>Delete everywhere</button></div></div>
-    {editing ? <form className="panel form-grid" onSubmit={save}><label>Title<input name="title" defaultValue={item.title} required /></label><TagInput key={item.id} options={tagOptions(store)} defaultValue={item.tags} />{item.type === "clothing" && <label>Size<input name="size" defaultValue={item.metadata.size} /></label>}<ImageField />{currentImage && <UploadedImage src={currentImage} alt={item.title} />}{item.metadata.imageDataUrl && <label className="checkbox"><input type="checkbox" name="removeImage" /> Remove uploaded image</label>}<label className="full">Description<textarea name="description" defaultValue={item.description} rows={3} /></label>{(item.type === "note" || item.metadata.markdown !== undefined) && <label className="full">Markdown<textarea name="markdown" defaultValue={item.metadata.markdown} rows={10} /></label>}<fieldset className="full"><legend>Appears in</legend>{store.db.lists.map((list) => <label className="checkbox" key={list.id}><input type="checkbox" name="lists" value={list.id} defaultChecked={selected.includes(list.id)} /> {list.title}</label>)}</fieldset><div className="actions"><button className="primary" type="submit">Save changes</button><button type="button" onClick={() => navigate({ ...screen, editing: false }, true)}>Cancel</button></div></form> : <ItemCard item={item} job={latestJob(store.db.jobs, item.id)} onOpen={() => undefined} expanded />}
+    {editing ? <form className="panel form-grid" onSubmit={save}><label>Title<input name="title" defaultValue={item.title} required /></label><TagInput key={item.id} options={tagOptions(store)} defaultValue={item.tags} />{item.type === "clothing" && <><label>Size<input name="size" defaultValue={item.metadata.size} /></label><ClothingPriceFields metadata={item.metadata} /></>}<ImageField />{currentImage && <UploadedImage src={currentImage} alt={item.title} />}{item.metadata.imageDataUrl && <label className="checkbox"><input type="checkbox" name="removeImage" /> Remove uploaded image</label>}<label className="full">Description<textarea name="description" defaultValue={item.description} rows={3} /></label>{(item.type === "note" || item.metadata.markdown !== undefined) && <label className="full">Markdown<textarea name="markdown" defaultValue={item.metadata.markdown} rows={10} /></label>}<fieldset className="full"><legend>Appears in</legend>{store.db.lists.map((list) => <label className="checkbox" key={list.id}><input type="checkbox" name="lists" value={list.id} defaultChecked={selected.includes(list.id)} /> {list.title}</label>)}</fieldset><div className="actions"><button className="primary" type="submit">Save changes</button><button type="button" onClick={() => navigate({ ...screen, editing: false }, true)}>Cancel</button></div></form> : <ItemCard item={item} job={latestJob(store.db.jobs, item.id)} onOpen={() => undefined} expanded />}
     <section><h2>Lists containing this item</h2><div className="actions">{store.db.lists.filter((list) => selected.includes(list.id)).map((list) => <button key={list.id} onClick={() => navigate({ name: "list", id: list.id })}>{list.title}</button>)}</div></section>
   </section>;
 }
@@ -326,12 +329,34 @@ function UploadedImage({ src, alt }: { src: string; alt: string }) {
   return <img className="preview" src={src} alt={alt} />;
 }
 
+function ClothingPriceFields({ metadata }: { metadata?: ItemMetadata }) {
+  return <>
+    <label>Price<input name="price" type="number" min="0" step="any" defaultValue={metadata?.price} /></label>
+    <label>Currency<input name="currency" placeholder="USD" pattern="[A-Za-z]{3}" maxLength={3} defaultValue={metadata?.currency} /></label>
+  </>;
+}
+
+function readClothingPrice(form: FormData): Pick<ItemMetadata, "price" | "currency"> {
+  const amount = String(form.get("price") ?? "").trim();
+  const price = Number(amount);
+  const currency = String(form.get("currency") ?? "").trim().toUpperCase();
+  if (!amount || !Number.isFinite(price) || price < 0) return { price: undefined, currency: undefined };
+  return { price, currency: /^[A-Z]{3}$/.test(currency) ? currency : undefined };
+}
+
+function formatClothingPrice(price: number, currency?: string) {
+  const options: Intl.NumberFormatOptions = currency && /^[A-Z]{3}$/i.test(currency)
+    ? { style: "currency", currency, currencyDisplay: "code" }
+    : { maximumFractionDigits: 20 };
+  return new Intl.NumberFormat(undefined, options).format(price);
+}
+
 function ItemContent({ item, previewUrl }: { item: Item; previewUrl?: string }) {
   if (item.type === "pdf") return <p>{item.metadata.dataUrl ? <a href={item.metadata.dataUrl} target="_blank">Open {item.metadata.fileName || "PDF"}</a> : item.sourceUrl ? <a href={item.sourceUrl}>Open PDF</a> : "PDF unavailable"}</p>;
   if (item.type === "media" && item.metadata.platform === "youtube" && item.metadata.platformId) return <div className="video"><iframe src={`https://www.youtube-nocookie.com/embed/${item.metadata.platformId}`} title={item.title} allowFullScreen /></div>;
   if (item.type === "url" || item.type === "media" || item.type === "album" || item.type === "track") return item.sourceUrl && !spotifyMusicUrl(item.sourceUrl) ? <p><a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl} ↗</a></p> : null;
   if (item.type === "movie") return <p>{item.metadata.year || "Year unknown"}{item.metadata.tmdbId && <> · <a href={`https://www.themoviedb.org/movie/${item.metadata.tmdbId}`} target="_blank" rel="noreferrer">TMDB {item.metadata.tmdbId} ↗</a></>}</p>;
-  if (item.type === "clothing") return <>{(item.sourceUrl || item.metadata.url) && <p><a href={item.sourceUrl || item.metadata.url} target="_blank" rel="noreferrer">{item.sourceUrl || item.metadata.url} ↗</a></p>}<div className="clothing">{previewUrl && <UploadedImage src={previewUrl} alt={item.title} />}<div><p><strong>Size:</strong> {item.metadata.size || "—"}</p><dl>{(item.metadata.measurements ?? []).map((measurement) => <div key={measurement.id}><dt>{measurement.name}</dt><dd>{measurement.value}{measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>)}</dl></div></div></>;
+  if (item.type === "clothing") return <>{(item.sourceUrl || item.metadata.url) && <p><a href={item.sourceUrl || item.metadata.url} target="_blank" rel="noreferrer">{item.sourceUrl || item.metadata.url} ↗</a></p>}<div className="clothing">{previewUrl && <UploadedImage src={previewUrl} alt={item.title} />}<div><p><strong>Size:</strong> {item.metadata.size || "—"}</p>{typeof item.metadata.price === "number" && <p><strong>Price:</strong> {formatClothingPrice(item.metadata.price, item.metadata.currency)}</p>}<dl>{(item.metadata.measurements ?? []).map((measurement) => <div key={measurement.id}><dt>{measurement.name}</dt><dd>{measurement.value}{measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>)}</dl></div></div></>;
   return null;
 }
 
@@ -345,5 +370,5 @@ function TagRow({ tags }: { tags: string[] }) { return tags.length ? <div classN
 function availability(item: Item) { const { external, imported, localReference } = item.availability; if (imported && external) return "Linked + Imported"; if (imported) return "Imported"; if (external) return "Linked"; if (localReference) return "Local"; return "Stored"; }
 function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
 function readFile(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }
-function searchable(item: Item) { return [item.title, item.description, item.tags.join(" "), item.sourceUrl, item.metadata.markdown, item.metadata.url, item.metadata.platform, item.metadata.year, item.metadata.tmdbId, item.metadata.name, item.metadata.size, item.metadata.fileName, item.metadata.derived?.summary, ...Object.entries(item.metadata.derived?.attributes ?? {}).flatMap(([name, value]) => [name, Array.isArray(value) ? value.join(" ") : value]), ...(item.metadata.measurements ?? []).flatMap((measurement) => [measurement.name, measurement.value, measurement.unit])].join(" ").toLowerCase(); }
+function searchable(item: Item) { return [item.title, item.description, item.tags.join(" "), item.sourceUrl, item.metadata.markdown, item.metadata.url, item.metadata.platform, item.metadata.year, item.metadata.tmdbId, item.metadata.name, item.metadata.size, item.metadata.price, item.metadata.currency, item.metadata.fileName, item.metadata.derived?.summary, ...Object.entries(item.metadata.derived?.attributes ?? {}).flatMap(([name, value]) => [name, Array.isArray(value) ? value.join(" ") : value]), ...(item.metadata.measurements ?? []).flatMap((measurement) => [measurement.name, measurement.value, measurement.unit])].join(" ").toLowerCase(); }
 function latestJob(jobs: ProcessingJob[], itemId: string) { return jobs.filter((job) => job.itemId === itemId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]; }

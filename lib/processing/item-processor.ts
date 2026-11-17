@@ -33,6 +33,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     if (!apiKey) throw new Error("OPENROUTER_KEY is required for item enrichment");
     let thumbnailUrl: string | undefined;
     let pageTitle: string | undefined;
+    let ebayPrice: ReturnType<typeof ebayOfferPrice>;
     let alternateSources: string[] = [];
     const model = this.options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5.6-luna";
     const tryImages = async (urls: string[]) => {
@@ -119,7 +120,12 @@ export class ItemEnrichmentProcessor implements JobProcessor {
           || matchHtml(html, /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description)["']/i);
         if (title) attributes.fetchedTitle = title;
         if (description) attributes.fetchedDescription = description;
-        sourceText = [title, description, text.slice(0, 60_000), ...[...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map((match) => match[1].slice(0, 20_000))].filter(Boolean).join(" ");
+        const structuredData = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].map(match => match[1]);
+        if (chromeDomain === "ebay.com" && visibleChromeDomain(new URL(finalUrl)) === chromeDomain) {
+          ebayPrice = ebayOfferPrice(structuredData);
+          if (ebayPrice) debug?.("enrichment.ebay_price", "Read price from eBay listing", ebayPrice);
+        }
+        sourceText = [title, description, text.slice(0, 60_000), ...structuredData.map(json => json.slice(0, 20_000))].filter(Boolean).join(" ");
       }
     }
 
@@ -179,11 +185,33 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     for (const key of ["name", "size", "price", "currency", "brand", "material", "color", "year", "tmdbId", "platform", "platformId"] as const) {
       if (specs[key] !== null) Object.assign(metadata, { [key]: specs[key] });
     }
+    if (ebayPrice) Object.assign(metadata, ebayPrice);
     if (specs.measurements.length) metadata.measurements = specs.measurements.map(({ unit, ...measurement }) => ({ ...measurement, id: uid(), ...(unit ? { unit } : {}) }));
     for (const attribute of specs.attributes) Object.defineProperty(attributes, attribute.name, { value: attribute.value, enumerable: true, configurable: true });
     if (alternateSources.length) attributes.enrichmentSources = alternateSources;
     return { title: musicKind ? undefined : pageTitle, summary: description, category, specs: metadata, attributes, processedAt: new Date().toISOString(), processorVersion: `openrouter:${model}:v1` };
   }
+}
+
+function ebayOfferPrice(structuredData: string[]): { price: number; currency: string } | undefined {
+  let result: { price: number; currency: string } | undefined;
+  for (const json of structuredData) {
+    let product;
+    try { product = JSON.parse(json); }
+    catch { continue; }
+    if (product?.["@type"] !== "Product") continue;
+    const offers = Array.isArray(product.offers) ? product.offers : [product.offers];
+    for (const offer of offers) {
+      if (offer?.["@type"] !== "Offer") continue;
+      const price = typeof offer.price === "string" && /^\d+(?:\.\d+)?$/.test(offer.price.trim())
+        ? Number(offer.price) : offer.price;
+      const currency = typeof offer.priceCurrency === "string" ? offer.priceCurrency.trim().toUpperCase() : "";
+      if (typeof price !== "number" || !Number.isFinite(price) || price < 0 || !/^[A-Z]{3}$/.test(currency)) continue;
+      if (result && (result.price !== price || result.currency !== currency)) return undefined;
+      result = { price, currency };
+    }
+  }
+  return result;
 }
 
 function words(value: string) { return value.trim() ? value.trim().split(/\s+/) : []; }

@@ -173,7 +173,7 @@ test("an uploaded item image is kept out of the enrichment request", async () =>
   assert.equal(result.category, "image");
 });
 
-test("uses Chrome first on eBay and feeds the rendered listing to enrichment", async () => {
+test("uses Chrome first on eBay and saves the listed price and currency", async () => {
   const sourceUrl = "https://www.ebay.com/itm/123";
   const signal = new AbortController().signal;
   const result = await new ItemEnrichmentProcessor({
@@ -184,17 +184,18 @@ test("uses Chrome first on eBay and feeds the rendered listing to enrichment", a
       assert.equal(receivedSignal, signal);
       return {
         url: sourceUrl,
-        html: '<title>Vintage watch</title><script type="application/ld+json">{"price":25}</script>',
+        html: '<title>Wool blazer</title><script type="application/ld+json">{"@type":"Product","offers":{"@type":"Offer","price":"25.99","priceCurrency":"USD","shippingDetails":{"shippingRate":{"value":"8.95","currency":"USD"}}}}</script>',
       };
     },
     fetch: async (url, init) => {
       assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
       const { messages } = JSON.parse(String(init?.body));
-      assert.match(JSON.parse(messages[1].content).pageContent, /Vintage watch.*"price":25/);
-      return completion(enrichment({ thumbnailUrl: null }));
+      assert.match(JSON.parse(messages[1].content).pageContent, /Wool blazer.*"price":"25.99"/);
+      return completion(enrichment({ category: "clothing", thumbnailUrl: null, specs: { ...enrichment().specs, price: 8.95, currency: "CAD" } }));
     },
   }).process({ ...baseItem, type: "url", sourceUrl }, signal);
-  assert.equal(result.title, "Vintage watch");
+  assert.equal(result.title, "Wool blazer");
+  assert.partialDeepStrictEqual(result.specs, { price: 25.99, currency: "USD" });
 });
 
 test("uses the existing HTTP path when Chrome fails or the domain is unlisted", async () => {
