@@ -67,3 +67,60 @@ test("leaves the title unchanged when the page title is missing or blank", async
     assert.equal(result.title, undefined);
   }
 });
+
+test("discards a browser challenge and enriches from citations on other sites", async () => {
+  const sourceUrl = "https://musicbrainz.org/release-group/album";
+  const alternateUrl = "https://record-label.example/albums/giant-steps";
+  const events: string[] = [];
+  const fetcher: typeof fetch = async (url, init) => {
+    if (url === sourceUrl) return new Response(`
+      <title>Verifying your browser</title>
+      <meta property="og:image" content="https://musicbrainz.org/challenge.png">
+      <body>Verification text must never reach enrichment.</body>`);
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(init?.body));
+    if (body.tools) {
+      assert.deepEqual(body.tools[0].parameters.excluded_domains, ["musicbrainz.org"]);
+      assert.deepEqual(JSON.parse(body.messages[1].content), { itemTitle: "Giant Steps" });
+      return Response.json({ choices: [{ message: { content: alternateUrl, annotations: [
+        { type: "url_citation", url_citation: { url: "https://www.musicbrainz.org/other", content: "Blocked host excerpt" } },
+        { type: "url_citation", url_citation: { url: "https://blocked.example/album", title: "Just a moment...", content: "Blocked alternate excerpt" } },
+        { type: "url_citation", url_citation: { url: "https://unrelated.example/album", content: "Unrelated excerpt", uncited: true } },
+        { type: "url_citation", url_citation: { url: alternateUrl, content: "Giant Steps was recorded by John Coltrane.", uncited: true } },
+      ] } }] });
+    }
+    const { pageContent } = JSON.parse(body.messages[1].content);
+    assert.equal(pageContent, `${alternateUrl}\nGiant Steps was recorded by John Coltrane.`);
+    return completion(enrichment({ category: "media", description: "An album by John Coltrane.", thumbnailUrl: null }));
+  };
+  const result = await new ItemEnrichmentProcessor({
+    apiKey: "test",
+    fetch: fetcher,
+    onEvent: (_description, fields) => { if (typeof fields?.event === "string") events.push(fields.event); },
+  }).process({ ...baseItem, type: "url", title: "Giant Steps", sourceUrl }, new AbortController().signal);
+  assert.equal(result.title, undefined);
+  assert.equal(result.attributes.fetchedTitle, undefined);
+  assert.equal(result.specs.thumbnailUrl, undefined);
+  assert.equal(result.summary, "An album by John Coltrane.");
+  assert.deepEqual(result.attributes.enrichmentSources, [alternateUrl]);
+  assert.ok(events.includes("enrichment.source_blocked"));
+  assert.ok(events.includes("enrichment.alternate_sources"));
+  assert.ok(!events.includes("enrichment.source_completed"));
+});
+
+test("leaves enrichment unsaved when an access block has no usable alternate source", async () => {
+  const sourceUrl = "https://example.com/item";
+  const fetcher: typeof fetch = async (url, init) => {
+    if (url === sourceUrl) return new Response("", { status: 403 });
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    assert.ok(JSON.parse(String(init?.body)).tools, "only the search request should run");
+    return Response.json({ choices: [{ message: { annotations: [
+      { type: "url_citation", url_citation: { url: "https://another.example/item" } },
+    ] } }] });
+  };
+  await assert.rejects(
+    new ItemEnrichmentProcessor({ apiKey: "test", fetch: fetcher })
+      .process({ ...baseItem, type: "url", sourceUrl }, new AbortController().signal),
+    /no usable alternate source/,
+  );
+});
