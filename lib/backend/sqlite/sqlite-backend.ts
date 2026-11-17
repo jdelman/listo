@@ -9,6 +9,8 @@ import type { Database, Item, ItemMetadata, List, ListItem, ProcessingJob } from
 import { LEGACY_USER_ID } from "./accounts-migration";
 import { openListoDatabase } from "./database";
 
+const MAX_RUNNING_JOBS = 4;
+
 type ListRow = { system_key: string | null; user_id: string; metadata_json: string; id: string; title: string; description: string; tags_json: string; default_view: List["defaultView"]; created_at: string; updated_at: string };
 type ItemRow = { id: string; type: Item["type"]; title: string; description: string; tags_json: string; source_url: string | null; availability_json: string; metadata_json: string; revision: number; created_at: string; updated_at: string };
 type ListItemRow = { id: string; list_id: string; item_id: string; position: number };
@@ -167,6 +169,10 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
   claim(workerId: string, leaseMs: number): ClaimedJob | null {
     const claim = this.db.transaction(() => {
       this.recoverExpired(leaseMs);
+      // Count every account inside the same write transaction as the claim, so
+      // separate worker processes cannot each reserve the last available slot.
+      const { running } = this.db.prepare("SELECT COUNT(*) AS running FROM jobs WHERE status = 'running'").get() as { running: number };
+      if (running >= MAX_RUNNING_JOBS) return null;
       const now = new Date().toISOString();
       const row = this.db.prepare("SELECT * FROM jobs WHERE status = 'queued' AND run_at <= ? AND (? IS NULL OR user_id=?) ORDER BY created_at LIMIT 1").get(now, this.userId, this.userId) as JobRow | undefined;
       if (!row) return null;

@@ -10,6 +10,7 @@ import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
 import { ItemEnrichmentProcessor } from "../lib/processing/item-processor";
 import { completion, enrichment } from "./fixtures/enrichment";
 import { runOne } from "../worker/runner";
+import { Accounts } from "../lib/auth/accounts";
 import { accountFixture } from "./account-fixture";
 import { POST as command } from "../app/api/commands/route";
 
@@ -130,6 +131,45 @@ test("expired worker leases return jobs to the queue", () => {
     const replacement = context.backend.claim("replacement-worker", 1_000);
     assert.equal(replacement?.id, claimed.id);
   } finally { context.close(); }
+});
+
+test("four running jobs cap claims across connections and accounts until slots reopen", async () => {
+  const context = fixture();
+  const secondConnection = openListoDatabase(context.database.name);
+  try {
+    const other = await new Accounts(context.database).create("queue-other", "queue-test-password");
+    const otherBackend = new SQLiteBackend(secondConnection, other.id);
+    const trustedWorker = new SQLiteBackend(secondConnection, null);
+    const jobs = Array.from({ length: 6 }, (_, index) => {
+      const backend = index % 2 ? otherBackend : context.backend;
+      const job = backend.createItem(note(), ["inbox"]);
+      // Make queue ordering deterministic without depending on clock resolution.
+      context.database.prepare("UPDATE jobs SET created_at = ? WHERE id = ?").run(new Date(index).toISOString(), job.id);
+      return job;
+    });
+    const claimed = jobs.slice(0, 4).map((job, index) => {
+      const worker = index % 2 ? trustedWorker : new SQLiteBackend(context.database, null);
+      const result = worker.claim(`worker-${index}`, 60_000);
+      assert.equal(result?.id, job.id);
+      return result!;
+    });
+    assert.equal(context.backend.claim("fifth-worker", 60_000), null);
+    assert.equal(otherBackend.claim("sixth-worker", 60_000), null);
+    assert.deepEqual(context.database.prepare("SELECT status, attempts FROM jobs WHERE id IN (?, ?) ORDER BY created_at").all(jobs[4].id, jobs[5].id), [
+      { status: "queued", attempts: 0 }, { status: "queued", attempts: 0 },
+    ]);
+
+    context.backend.complete(claimed[0].id, claimed[0].lockToken);
+    assert.equal(trustedWorker.claim("replacement-worker", 60_000)?.id, jobs[4].id);
+    assert.equal(trustedWorker.claim("still-full", 60_000), null);
+    trustedWorker.fail(claimed[1].id, claimed[1].lockToken, new Error("retry later"));
+    assert.equal(trustedWorker.claim("next-worker", 60_000)?.id, jobs[5].id);
+    assert.equal(trustedWorker.claim("still-full", 60_000), null);
+
+    context.database.prepare("UPDATE jobs SET locked_at = ? WHERE id = ?").run(new Date(0).toISOString(), claimed[2].id);
+    assert.equal(trustedWorker.claim("recovery-worker", 60_000)?.id, claimed[2].id);
+    assert.deepEqual(context.database.prepare("SELECT COUNT(*) AS running FROM jobs WHERE status = 'running'").get(), { running: 4 });
+  } finally { secondConnection.close(); context.close(); }
 });
 
 test("does not overwrite a concurrent edit with enrichment", () => {
