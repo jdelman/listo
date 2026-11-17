@@ -41,7 +41,7 @@ export async function enrichSpotifyMusic(
     request: typeof fetch; storage: ThumbnailStorage; signal: AbortSignal; accessToken?: string; youtubeKey?: string;
   },
 ): Promise<MusicEnrichment | undefined> {
-  const source = spotifyMusic(item.sourceUrl || item.metadata.url);
+  const source = spotifyMusic(item.sourceUrl) || spotifyMusic(item.metadata.url) || spotifyMusic(item.metadata.spotifyUrl);
   const kind = item.type === "album" || item.type === "track" ? item.type : source?.kind;
   if (!kind) return;
   if (source && source.kind !== kind) throw new Error(`This Spotify link points to a ${source.kind}. Save it as a ${source.kind} to enrich it.`);

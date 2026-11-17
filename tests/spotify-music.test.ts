@@ -15,6 +15,30 @@ const release = { name: "Record", release_date: "2002-01", images: [{ url: image
 const artists = [{ id: artistId, name: "The Band" }];
 const availability = { external: false, localReference: false, imported: false };
 
+for (const kind of ["album", "track"] as const) {
+  test(`uses a saved Spotify ${kind} link instead of searching the title`, async () => {
+    const processor = new ItemEnrichmentProcessor({
+      spotifyAccessToken: "fake",
+      fetch: async (input) => {
+        const { hostname, pathname } = new URL(String(input));
+        assert.notEqual(pathname, "/v1/search");
+        if (pathname === `/v1/${kind}s/${id}`) return Response.json({ ...release, id, artists, album: release });
+        if (hostname === "api.spotify.com" || hostname === "itunes.apple.com" || hostname === "i.scdn.co") return new Response(null, { status: 503 });
+        throw new Error(`Unexpected request to ${hostname}${pathname}`);
+      },
+    });
+    const result = await processor.process({
+      id, type: kind, title: "The Band - Record", description: "", tags: [],
+      sourceUrl: "https://example.com/review",
+      metadata: { url: "https://example.com/review", spotifyUrl: `https://open.spotify.com/intl-es/${kind}/${id}?si=share` },
+      availability, createdAt: "", updatedAt: "", revision: 1,
+    }, new AbortController().signal);
+    assert.equal(result.category, kind);
+    assert.equal(result.specs.spotifyUrl, `https://open.spotify.com/${kind}/${id}`);
+    assert.equal(result.specs.artist, "The Band");
+  });
+}
+
 test("recognizes Spotify share links and enriches a queued track without OpenRouter", async () => {
   const url = `https://open.spotify.com/intl-es/track/${id}?si=share`;
   const type = classify(url);
