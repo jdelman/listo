@@ -1,3 +1,5 @@
+import { SpotifyConnections } from "../../auth/spotify-connections";
+import { spotifyAccessToken } from "../../processing/spotify-auth";
 import { spotifyPlaylistId } from "../../spotify";
 import { auditBackend } from "../audit";
 import type Sqlite from "better-sqlite3";
@@ -201,6 +203,16 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     const result = this.db.prepare("UPDATE items SET metadata_json = ?, tags_json = ?, updated_at = ?, type = ?, description = ?, title = ? WHERE id = ? AND revision = ?")
       .run(JSON.stringify(metadata), JSON.stringify(tags), derived.processedAt, derived.category ?? item.type, description, derived.title?.trim() || item.title, itemId, inputRevision);
     return result.changes === 1;
+  }
+
+  async spotifyPlaylistToken(job: ClaimedJob, request: typeof fetch, signal: AbortSignal): Promise<string> {
+    const owner = this.db.prepare("SELECT user_id FROM jobs WHERE id=? AND lock_token=? AND status='running'")
+      .get(job.id, job.lockToken) as { user_id: string } | undefined;
+    if (!owner || (this.userId !== null && owner.user_id !== this.userId)) throw new Error("Job owner or lease changed");
+    const token = await new SpotifyConnections(this.db).accessToken(owner.user_id, request, signal);
+    if (token) return token;
+    if (owner.user_id === LEGACY_USER_ID) return spotifyAccessToken(request, signal, { playlist: true });
+    throw new Error("Connect Spotify in Profile to import playlists");
   }
 
   /** Each write is fenced by the current lease and input revision. Retried positions are idempotent. */

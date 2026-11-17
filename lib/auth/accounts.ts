@@ -64,6 +64,7 @@ export class Accounts {
   logout(token?: string) { if (token) this.db.prepare("DELETE FROM sessions WHERE token_hash=?").run(digest(token)); }
   revokeAll(userId: string) {
     this.db.prepare("DELETE FROM sessions WHERE user_id=?").run(userId);
+    this.db.prepare("DELETE FROM spotify_connections WHERE user_id=?").run(userId);
     this.db.prepare("DELETE FROM password_resets WHERE user_id=?").run(userId);
     this.db.prepare("DELETE FROM oauth_codes WHERE user_id=?").run(userId);
     this.db.prepare("UPDATE oauth_grants SET revoked=1 WHERE user_id=?").run(userId);

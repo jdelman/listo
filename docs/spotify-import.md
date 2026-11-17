@@ -2,21 +2,15 @@
 
 Paste an `https://open.spotify.com/playlist/...` share URL into Quick Add and save it. Localized `/intl-xx/playlist/...` URLs and query parameters are supported. Saving queues an `import-spotify-playlist` job automatically, including items created through the storage API. The worker creates a separate list named after the Spotify playlist. The source item links to that list and shows the existing job status/error display.
 
-## Worker configuration
+## Connect Spotify in Profile
 
-Add server-only credentials to `.env.local` and restart the worker:
+Set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` for the web app and worker. In your Spotify app settings, register the exact callback URL. For Listo at `http://localhost:3000` or `http://127.0.0.1:3000`, register `http://127.0.0.1:3000/api/spotify/callback`. For an HTTPS installation, register your Listo origin followed by `/api/spotify/callback`. Spotify requires an HTTPS address or an explicit loopback IP, so use HTTPS for a remote installation. [Spotify redirect URI requirements](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri)
 
-```dotenv
-SPOTIFY_CLIENT_ID=your-app-client-id
-SPOTIFY_CLIENT_SECRET=your-app-client-secret
-SPOTIFY_REFRESH_TOKEN=your-user-refresh-token
-```
+Open Profile → Connected applications → Spotify → Connect, then authorize playlist access. Listo uses the connected account for that user's playlist jobs and refreshes access automatically. Disconnect from Profile to remove the local credentials. An import that already failed can be run again by saving the playlist URL again.
 
-Obtain the refresh token through Spotify's [Authorization Code flow](https://developer.spotify.com/documentation/web-api/tutorials/code-flow), authorizing the account that can access the playlists. Request `playlist-read-private` and `playlist-read-collaborative` for private and collaborative playlists. An existing short-lived user token can alternatively be provided as `SPOTIFY_ACCESS_TOKEN`. A client-credentials token alone is not a substitute for user authorization. Tokens are never placed in list metadata or browser responses. This feature uses configured worker credentials; it does not add a browser sign-in flow.
+Tokens are encrypted in SQLite. Listo creates an owner-only key file alongside the database, with `.spotify-key` appended to the database filename. Keep that key separate from database backups and retain it when migrating the installation. Without the original key, reconnect Spotify to replace the encrypted credentials. The original Listo account can still use the legacy `SPOTIFY_REFRESH_TOKEN` or `SPOTIFY_ACCESS_TOKEN` worker setting if it has no Profile connection.
 
-Spotify's app mode and account restrictions still apply; inaccessible playlists produce a visible job error. See the [current playlist items endpoint](https://developer.spotify.com/documentation/web-api/reference/get-playlists-items) and [Spotify's API changes](https://developer.spotify.com/documentation/web-api/references/changes/february-2026).
-
-The worker can run with Spotify credentials alone; `OPENROUTER_KEY` is still needed for ordinary item enrichment. Imported Spotify tracks are stored directly without AI enrichment.
+Spotify app mode and account restrictions still apply. In Development Mode, the connected Spotify user must be allowed in the app settings, and playlist items are limited to playlists the user owns or collaborates on. [Spotify Development Mode migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
 
 ## Stored data and recovery
 

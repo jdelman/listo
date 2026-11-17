@@ -143,7 +143,7 @@ test("refreshes configured user credentials without exposing them in saved data"
         refreshed = true;
         assert.equal(init?.method, "POST");
         assert.equal(String(init?.body), "grant_type=refresh_token&refresh_token=refresh");
-        return json({ access_token: "fresh-token" });
+        return json({ access_token: "fresh-token", expires_in: 3600 });
       }
       assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer fresh-token");
       return String(input).includes("/items?") ? json({ items: [], next: null, total: 0 }) : json(playlist);
@@ -175,7 +175,7 @@ test("migrates existing lists and preserves playlist metadata through edits and 
     migrated.updateList("inbox", { metadata: { thumbnailUrl: image, sourceUrl: url } });
     migrated.updateList("inbox", { title: "Still here" });
     assert.equal(migrated.getDatabase().lists[0].metadata?.thumbnailUrl, image);
-    assert.equal((db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version, 4);
+    assert.equal((db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number }).version, 5);
   } finally { db.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 

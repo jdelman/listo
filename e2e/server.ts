@@ -21,7 +21,7 @@ accounts.db.close();
 const child = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), "dev", "--webpack", "--hostname", "0.0.0.0", "--port", String(E2E_PORT)], {
   cwd: appDirectory,
   stdio: "inherit",
-  env: { ...process.env, LISTO_DB_PATH: database, LISTO_ORIGIN: `http://localhost:${E2E_PORT}`, LISTO_LOG_DIR: join(directory, "logs"), LISTO_THUMBNAIL_DIR: join(directory, "thumbnails") },
+  env: { ...process.env, LISTO_DB_PATH: database, LISTO_ORIGIN: `http://localhost:${E2E_PORT}`, LISTO_LOG_DIR: join(directory, "logs"), LISTO_THUMBNAIL_DIR: join(directory, "thumbnails"), SPOTIFY_CLIENT_ID: "browser-test-client", SPOTIFY_CLIENT_SECRET: "browser-test-secret" },
 });
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => child.kill("SIGTERM"));
 child.once("exit", code => { rmSync(directory, { recursive: true, force: true }); process.exitCode = code || 0; });

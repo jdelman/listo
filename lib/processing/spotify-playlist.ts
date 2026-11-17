@@ -10,7 +10,11 @@ import type { JobProcessor } from "./contracts";
 type Track = { id: string; type: string; name: string; is_local?: boolean; artists: { name: string }[]; album?: { images?: { url: string }[] } };
 type Page = { items: { track?: Track | null; item?: Track | null; is_local?: boolean }[]; next: string | null; total: number };
 type Playlist = { name: string; description: string; images?: { url: string }[]; snapshot_id: string };
-interface ImportStore { getItem(id: string): Item | null; saveSpotifyImport(job: ClaimedJob, list: List, track?: Item, position?: number): void }
+interface ImportStore {
+  getItem(id: string): Item | null;
+  saveSpotifyImport(job: ClaimedJob, list: List, track?: Item, position?: number): void;
+  spotifyPlaylistToken?(job: ClaimedJob, request: typeof fetch, signal: AbortSignal): Promise<string>;
+}
 
 export class SpotifyPlaylistProcessor implements JobProcessor {
   readonly kind = "import-spotify-playlist" as const;
@@ -23,7 +27,9 @@ export class SpotifyPlaylistProcessor implements JobProcessor {
     const request = this.options.fetch ?? fetch;
     // Bound an attempt below the queue lease; subsequent attempts resume stored positions.
     signal = AbortSignal.any([signal, AbortSignal.timeout(240_000)]);
-    const token = this.options.accessToken ?? await spotifyAccessToken(request, signal, { playlist: true });
+    const token = this.options.accessToken ?? await (this.store.spotifyPlaylistToken
+      ? this.store.spotifyPlaylistToken(job, request, signal)
+      : spotifyAccessToken(request, signal, { playlist: true }));
     const get = async <T>(url: string): Promise<T> => {
       const parsed = new URL(url);
       if (parsed.origin !== "https://api.spotify.com" || !parsed.pathname.startsWith(`/v1/playlists/${id}`)) throw new Error("Invalid Spotify pagination URL");

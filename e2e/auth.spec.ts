@@ -169,3 +169,34 @@ test("Add an item exposes every registered type and saves a track to the current
   const item = page.getByRole("article").filter({ hasText: "Browser test track" });
   await expect(item).toContainText("Track");
 });
+
+
+test("Spotify Connect starts consent and returns to the initiating Profile", async ({ page, baseURL }, info) => {
+  await page.goto("/profile");
+  await signIn(page, info.project.name);
+  await expect(page.getByRole("heading", { name: "Connected applications" })).toBeVisible();
+  const connect = page.getByRole("button", { name: "Connect", exact: true });
+
+  if (!["localhost", "127.0.0.1"].includes(info.project.name)) {
+    await connect.click();
+    await expect(page.getByRole("status")).toContainText("an HTTPS or loopback Listo address");
+    return;
+  }
+  let consent: URL | undefined;
+  await page.route("**/api/spotify/connect", async (route) => {
+    const response = await route.fetch({ maxRedirects: 0 });
+    expect(response.status()).toBe(303);
+    consent = new URL(response.headers().location);
+    await route.fulfill({ status: 200, body: "Spotify consent simulated" });
+  });
+  await connect.click();
+  await expect(page.getByText("Spotify consent simulated")).toBeVisible();
+  expect(consent?.origin).toBe("https://accounts.spotify.com");
+  const callback = new URL(consent!.searchParams.get("redirect_uri")!);
+  expect(callback.href).toBe(`http://127.0.0.1:${E2E_PORT}/api/spotify/callback`);
+  callback.search = new URLSearchParams({ state: consent!.searchParams.get("state")!, error: "access_denied" }).toString();
+  await page.goto(callback.href);
+  await expect(page.getByRole("status")).toHaveText("Spotify authorization was declined.");
+  await expect(page).toHaveURL(`${baseURL}/profile?spotify=denied`);
+  await expect(connect).toBeVisible();
+});

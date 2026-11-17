@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { migrateSpotifyConnections } from "./spotify-migration";
 import { migrateAccounts, migrateOAuthAudience } from "./accounts-migration";
 import { mkdirSync, chmodSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -27,6 +28,7 @@ export function openListoDatabase(path = process.env.LISTO_DB_PATH || defaultPat
     }
     migrateAccounts(db);
     migrateOAuthAudience(db);
+    migrateSpotifyConnections(db);
     if (path !== ":memory:") chmodSync(path, 0o600);
   } catch (error) { db.close(); throw error; }
   databases.set(path, db);
