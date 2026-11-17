@@ -1,6 +1,6 @@
 import { FileThumbnailStorage, type ThumbnailStorage } from "../storage/thumbnail-storage";
 import { metadataImages, storeThumbnail } from "./thumbnails";
-import type { LogFields } from "../logging";
+import { safeError, type LogFields, type Logger } from "../logging";
 import { decodeHTML } from "entities";
 import { spotifyMusicUrl } from "../spotify";
 import type { JobProcessor } from "./contracts";
@@ -12,16 +12,22 @@ import { findWebSources, isBlockedPage } from "./alternate-sources";
 export class ItemEnrichmentProcessor implements JobProcessor {
   readonly kind = "process-item" as const;
 
-  constructor(private readonly options: { apiKey?: string; model?: string; spotifyAccessToken?: string; youtubeApiKey?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void } = {}) {}
+  constructor(private readonly options: { apiKey?: string; model?: string; spotifyAccessToken?: string; youtubeApiKey?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void; debug?: Logger } = {}) {}
 
   async process(item: Item, signal: AbortSignal) {
+    const debug: Logger | undefined = this.options.debug && ((event, description, fields) =>
+      this.options.debug?.(event, description, { ...fields, itemId: item.id }));
+    debug?.("enrichment.started", "Starting item enrichment", { itemType: item.type });
     const request = this.options.fetch ?? fetch;
     const storage = this.options.storage ?? new FileThumbnailStorage();
     const music = await enrichSpotifyMusic(item, {
       request, storage, signal, accessToken: this.options.spotifyAccessToken,
       youtubeKey: this.options.youtubeApiKey ?? process.env.YOUTUBE_API_KEY,
     });
-    if (music) return music;
+    if (music) {
+      debug?.("enrichment.spotify_completed", "Enriched item through Spotify", { category: music.category });
+      return music;
+    }
     const apiKey = this.options.apiKey ?? process.env.OPENROUTER_KEY;
     if (!apiKey) throw new Error("OPENROUTER_KEY is required for item enrichment");
     let thumbnailUrl: string | undefined;
@@ -30,8 +36,14 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     const model = this.options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5.6-luna";
     const tryImages = async (urls: string[]) => {
       for (const url of urls) {
-        try { thumbnailUrl = await storeThumbnail(url, storage, request, signal); return; }
-        catch { signal.throwIfAborted(); }
+        try {
+          thumbnailUrl = await storeThumbnail(url, storage, request, signal);
+          debug?.("enrichment.thumbnail_stored", "Stored enrichment thumbnail");
+          return;
+        } catch (error) {
+          debug?.("enrichment.thumbnail_failed", "Could not store thumbnail candidate", { error: safeError(error) });
+          signal.throwIfAborted();
+        }
       }
     };
     if (item.metadata.dataUrl) await tryImages([item.metadata.dataUrl]);
@@ -59,10 +71,22 @@ export class ItemEnrichmentProcessor implements JobProcessor {
       const html = isText ? await response.text() : "";
       const title = matchHtml(html, /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i);
       const text = stripHtml(html);
-      if (isBlockedPage(response, title, text)) {
+      const blocked = isBlockedPage(response, title, text);
+      debug?.("enrichment.source_response", "Received item source response", {
+        status: response.status,
+        finalUrl: safeError((response.url || sourceUrl).split(/[?#]/, 1)[0]),
+        redirected: response.redirected,
+        contentType,
+        cloudflareChallenge: response.headers.get("cf-mitigated") === "challenge",
+        blocked,
+        title: safeError(title),
+        characters: html.length,
+        textPreview: safeError(text),
+      });
+      if (blocked) {
         const blockedHosts = [...new Set([sourceUrl, response.url || sourceUrl].map(url => new URL(url).hostname.replace(/^www\./, "")))];
         this.options.onEvent?.("Source blocked enrichment; searching other sites", { event: "enrichment.source_blocked", itemId: item.id, sourceHost: blockedHosts.at(-1), status: response.status });
-        const sources = await findWebSources(item.metadata.name || item.title, { request, apiKey, model, signal, blockedHosts });
+        const sources = await findWebSources(item.metadata.name || item.title, { request, apiKey, model, signal, blockedHosts, debug });
         if (!sources.length) throw new Error("Source blocked enrichment and no usable alternate source was found");
         alternateSources = sources.map(source => source.url);
         sourceText = sources.map(source => `${source.url}\n${source.text}`).join("\n\n");
@@ -105,9 +129,14 @@ export class ItemEnrichmentProcessor implements JobProcessor {
         response_format: { type: "json_schema", json_schema: { name: "item_enrichment", strict: true, schema: enrichmentJsonSchema } },
       }),
     });
+    debug?.("enrichment.model_response", "Received enrichment model response", { model, status: response.status });
     if (!response.ok) throw new Error(`OpenRouter returned HTTP ${response.status}`);
     const completion = await response.json();
     const choice = completion.choices?.[0];
+    debug?.("enrichment.model_result", "Read enrichment model result", {
+      finishReason: choice?.finish_reason,
+      resultPreview: typeof choice?.message?.content === "string" ? safeError(choice.message.content) : undefined,
+    });
     if (choice?.finish_reason !== "stop" || typeof choice.message?.content !== "string") throw new Error("OpenRouter did not return a complete enrichment response");
     const parsed = enrichmentSchema.safeParse(JSON.parse(choice.message.content));
     if (!parsed.success) throw new Error("OpenRouter returned invalid item enrichment");
@@ -121,7 +150,7 @@ export class ItemEnrichmentProcessor implements JobProcessor {
     if (linkedSpotifyUrl) metadata.spotifyUrl = linkedSpotifyUrl;
     if (musicKind && !linkedSpotifyUrl) {
       try {
-        const sources = await findWebSources(item.title, { request, apiKey, model, signal, spotifyKind: musicKind });
+        const sources = await findWebSources(item.title, { request, apiKey, model, signal, spotifyKind: musicKind, debug });
         const spotifyUrl = sources.map(source => spotifyMusicUrl(source.url, musicKind)).find(Boolean);
         if (spotifyUrl) metadata.spotifyUrl = spotifyUrl;
       } catch (error) {

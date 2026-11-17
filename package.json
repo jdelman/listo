@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "concurrently -k -n web,worker \"next start --hostname 0.0.0.0\" \"npm:worker\"",
     "worker": "tsx worker/local-worker.ts",
-    "worker:dev": "tsx watch worker/local-worker.ts",
+    "worker:dev": "tsx watch worker/local-worker.ts --dev",
     "test": "node --import tsx --test tests/*.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern data",
     "mcp": "tsx mcp/stdio.ts",

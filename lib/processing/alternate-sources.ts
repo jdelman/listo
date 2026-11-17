@@ -1,3 +1,5 @@
+import { safeError, type Logger } from "../logging";
+
 const challengeTitle = /^(?:just a moment\b|attention required\b|access denied\b|request (?:blocked|rejected)\b|forbidden\b|(?:verifying|checking|verify|check) (?:your |the )?browser\b|(?:verify|confirm)(?: that)? you(?: are|'re) (?:a )?human\b|(?:human|security|browser|bot) (?:verification|check)\b|captcha(?: challenge)?\b|pardon our interruption\b|robot check\b|unusual traffic\b)/i;
 const challengeText = /enable javascript and cookies to continue|checking your browser before accessing|(?:verify|confirm) (?:that )?you (?:are|'re) (?:a )?human|complete (?:the|a) (?:security check|captcha) to continue/i;
 
@@ -10,12 +12,15 @@ export function isBlockedPage(response: Response, title: string, text: string) {
 
 export async function findWebSources(
   itemTitle: string,
-  options: { request: typeof fetch; apiKey: string; model: string; signal: AbortSignal; blockedHosts?: string[]; spotifyKind?: "album" | "track" },
+  options: { request: typeof fetch; apiKey: string; model: string; signal: AbortSignal; blockedHosts?: string[]; spotifyKind?: "album" | "track"; debug?: Logger },
 ) {
-  const { request, apiKey, model, signal, blockedHosts = [], spotifyKind } = options;
+  const { request, apiKey, model, signal, blockedHosts = [], spotifyKind, debug } = options;
   const searchInstruction = spotifyKind
     ? `Find the direct open.spotify.com/${spotifyKind}/ URL for this exact ${spotifyKind}. Match both the artist and title when provided. Exclude other artists, playlists, compilations, and links to other kinds of Spotify content.`
     : "Find reliable pages about the exact item named by the user. Omit bot checks, login pages, and results about other items.";
+  debug?.("enrichment.search_started", "Searching Exa via OpenRouter", {
+    query: safeError(itemTitle.slice(0, 500)), blockedHosts, spotifyKind,
+  });
   const response = await request("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
@@ -33,10 +38,16 @@ export async function findWebSources(
       ],
     }),
   });
+  debug?.("enrichment.search_response", "Received Exa search response from OpenRouter", { status: response.status, spotifyKind });
   if (!response.ok) throw new Error(`Alternate source search returned HTTP ${response.status}`);
   const result = await response.json();
   const message = result.choices?.[0]?.message;
   const annotations: unknown = message?.annotations;
+  debug?.("enrichment.search_results", "Read Exa search results", {
+    spotifyKind,
+    citationCount: Array.isArray(annotations) ? annotations.length : 0,
+    selectedUrlsPreview: typeof message?.content === "string" ? safeError(message.content) : undefined,
+  });
   if (!Array.isArray(annotations)) return [];
 
   const selectedUrls = new Set<string>(
@@ -57,5 +68,11 @@ export async function findWebSources(
     sources.set(url.href, text.slice(0, 8_000));
     if (sources.size >= 5) break;
   }
+  debug?.("enrichment.search_sources", "Filtered Exa search results", {
+    spotifyKind,
+    acceptedCount: sources.size,
+    urls: [...sources.keys()].map(url => safeError(url)),
+    excerpts: [...sources.values()].map(source => safeError(source.slice(0, 500))),
+  });
   return [...sources].map(([url, text]) => ({ url, text }));
 }

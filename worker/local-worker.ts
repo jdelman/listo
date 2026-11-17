@@ -4,7 +4,7 @@ import nextEnv from "@next/env";
 import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
 import { SpotifyPlaylistProcessor } from "../lib/processing/spotify-playlist";
 import { ItemEnrichmentProcessor } from "../lib/processing/item-processor";
-import { workerLog, safeError } from "../lib/logging";
+import { debugLoggingEnabled, workerLog, safeError } from "../lib/logging";
 import { runWorker } from "./runner";
 
 const controller = new AbortController();
@@ -18,6 +18,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 try {
   nextEnv.loadEnvConfig(process.cwd());
+  if (process.argv.includes("--dev")) process.env.LISTO_DEBUG = "1";
   workerLog("worker.starting", "Starting enrichment worker", { workerId, database: resolve(process.env.LISTO_DB_PATH || "data/listo.sqlite") });
   const hasSpotifyClient = process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET;
   if (!hasSpotifyClient && !process.env.OPENROUTER_KEY && !process.env.SPOTIFY_REFRESH_TOKEN && !process.env.SPOTIFY_ACCESS_TOKEN) throw new Error("OPENROUTER_KEY is required for item enrichment");
@@ -26,7 +27,13 @@ try {
   await runWorker({
     queue: backend,
     store: backend,
-    processors: [new SpotifyPlaylistProcessor(backend), new ItemEnrichmentProcessor({ onEvent: (description, fields) => workerLog(String(fields?.event || "enrichment.progress"), description, fields) })],
+    processors: [
+      new SpotifyPlaylistProcessor(backend),
+      new ItemEnrichmentProcessor({
+        onEvent: (description, fields) => workerLog(String(fields?.event || "enrichment.progress"), description, fields),
+        debug: debugLoggingEnabled() ? (event, description, fields) => workerLog(event, description, fields, "debug") : undefined,
+      }),
+    ],
     workerId,
     onEvent: (description, fields) => workerLog(String(fields?.event || "worker.progress"), description, fields, fields?.error ? "error" : "info"),
   }, controller.signal);

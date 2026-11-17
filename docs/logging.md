@@ -9,7 +9,9 @@ Set `LISTO_LOG_DIR` in `.env.local` to change the directory. The default lives i
 
 Watch live worker events with `tail -f data/logs/worker.log`, or start both processes with `npm run dev`. For production use `npm run build` followed by `npm start`. `next dev` alone does not run the worker. Application logging uses stderr so it cannot corrupt MCP's stdout protocol.
 
-Logs omit command payloads, page bodies, prompts, uploaded data, and model responses. Known environment credentials are redacted from error messages. File-write failures are reported to stderr without failing a successful application operation. Browser interactions (control activation, field changes, submission, navigation, and drag/drop) are also recorded as observed events, with the path and control label. Field values and query strings are omitted. These best-effort events describe user intent; storage events separately establish whether a mutation succeeded. Local export is visible as an Export HTML activation.
+Debug events go to stderr and are enabled automatically by `npm run dev` and `npm run worker:dev`. Set `LISTO_DEBUG=1` to enable them when running the worker outside dev. Filter by `itemId` to follow the initial response, block detection, Exa results, thumbnail attempts, and model output. Debug output includes bounded text previews from these responses.
+
+Regular logs omit command payloads, page bodies, prompts, uploaded data, and model responses. Known environment credentials are redacted from error messages. File-write failures are reported to stderr without failing a successful application operation. Browser interactions (control activation, field changes, submission, navigation, and drag/drop) are also recorded as observed events, with the path and control label. Field values and query strings are omitted. These best-effort events describe user intent; storage events separately establish whether a mutation succeeded. Local export is visible as an Export HTML activation.
 
 ## Investigating processing
 

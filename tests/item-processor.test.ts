@@ -72,6 +72,7 @@ test("discards a browser challenge and enriches from citations on other sites", 
   const sourceUrl = "https://musicbrainz.org/release-group/album";
   const alternateUrl = "https://record-label.example/albums/giant-steps";
   const events: string[] = [];
+  const debugEvents = new Map<string, unknown>();
   const fetcher: typeof fetch = async (url, init) => {
     if (url === sourceUrl) return new Response(`
       <title>Verifying your browser</title>
@@ -97,6 +98,7 @@ test("discards a browser challenge and enriches from citations on other sites", 
     apiKey: "test",
     fetch: fetcher,
     onEvent: (_description, fields) => { if (typeof fields?.event === "string") events.push(fields.event); },
+    debug: (event, _description, fields) => { debugEvents.set(event, fields); },
   }).process({ ...baseItem, type: "url", title: "Giant Steps", sourceUrl }, new AbortController().signal);
   assert.equal(result.title, undefined);
   assert.equal(result.attributes.fetchedTitle, undefined);
@@ -106,6 +108,14 @@ test("discards a browser challenge and enriches from citations on other sites", 
   assert.ok(events.includes("enrichment.source_blocked"));
   assert.ok(events.includes("enrichment.alternate_sources"));
   assert.ok(!events.includes("enrichment.source_completed"));
+  assert.partialDeepStrictEqual(debugEvents.get("enrichment.source_response"), {
+    itemId: baseItem.id, status: 200, blocked: true, title: "Verifying your browser",
+  });
+  assert.partialDeepStrictEqual(debugEvents.get("enrichment.search_results"), { citationCount: 4 });
+  assert.partialDeepStrictEqual(debugEvents.get("enrichment.search_sources"), {
+    acceptedCount: 1, urls: [alternateUrl], excerpts: ["Giant Steps was recorded by John Coltrane."],
+  });
+  assert.partialDeepStrictEqual(debugEvents.get("enrichment.model_response"), { status: 200 });
 });
 
 test("leaves enrichment unsaved when an access block has no usable alternate source", async () => {

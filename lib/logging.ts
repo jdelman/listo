@@ -2,13 +2,19 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 export type LogFields = Record<string, string | number | boolean | string[] | undefined>;
-export type Logger = (event: string, description: string, fields?: LogFields, level?: "info" | "error") => void;
+export type Logger = (event: string, description: string, fields?: LogFields, level?: "debug" | "info" | "error") => void;
+
+export function debugLoggingEnabled(): boolean {
+  return process.env.NODE_ENV === "development" || process.env.LISTO_DEBUG === "1";
+}
 
 // stderr keeps stdout available for the MCP stdio protocol.
 export function createLogger(channel: "application" | "worker", directory?: string): Logger {
   return (event, description, fields = {}, level = "info") => {
+    if (level === "debug" && !debugLoggingEnabled()) return;
     const line = JSON.stringify({ ...fields, timestamp: new Date().toISOString(), level, channel, pid: process.pid, event, description });
     console.error(line);
+    if (level === "debug") return;
     try {
       const path = directory ?? process.env.LISTO_LOG_DIR ?? join(process.cwd(), "data", "logs");
       mkdirSync(path, { recursive: true });
