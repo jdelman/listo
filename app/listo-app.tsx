@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { classify, hostname, mediaPlatform, youtubeId } from "@/lib/capture";
 import { exportList } from "@/lib/export";
 import { Screen, screenFromUrl, urlForScreen } from "@/lib/routes";
+import { spotifyMusicUrl } from "@/lib/spotify";
 import { useListoStore } from "@/lib/store";
 import { ITEM_LABELS, MEASUREMENT_PRESETS, Item, ItemType, List, Measurement, ProcessingJob, splitTags, uid } from "@/lib/types";
 
@@ -208,11 +209,36 @@ function ItemScreen({ store, screen, navigate, navigateUrl, flash }: { store: Re
 }
 
 function ItemCard({ item, job, onOpen, onEdit, controls, draggable, onDragStart, onDrop, expanded = false }: { item: Item; job?: ProcessingJob; onOpen: () => void; onEdit?: () => void; controls?: React.ReactNode; draggable?: boolean; onDragStart?: React.DragEventHandler; onDrop?: React.DragEventHandler; expanded?: boolean }) {
+  const spotifyUrl = spotifyMusicUrl(item.metadata.spotifyUrl) || spotifyMusicUrl(item.sourceUrl);
+  const music = item.type === "album" || item.type === "track";
+  const spotifySearch = music && !spotifyUrl ? `https://open.spotify.com/search/${encodeURIComponent(item.title)}` : undefined;
+  const appleMusicUrl = music ? serviceLink(item.metadata.appleMusicUrl, "https://music.apple.com") : undefined;
+  const musicQuery = [item.title, item.metadata.artist].filter(Boolean).join(" ");
+  const appleSearch = music && !appleMusicUrl && item.metadata.artist
+    ? `https://music.apple.com/us/search?term=${encodeURIComponent(musicQuery)}` : undefined;
+  const youtubeVideo = item.type === "track" ? serviceLink(item.metadata.youtubeUrl, "https://www.youtube.com") : undefined;
+  const youtubeSearch = item.type === "track" && !youtubeVideo && item.metadata.artist
+    ? `https://www.youtube.com/results?search_query=${encodeURIComponent(musicQuery)}` : undefined;
   return <article className="item-card" draggable={draggable} onDragStart={onDragStart} onDragOver={(event) => draggable && event.preventDefault()} onDrop={onDrop}>
     <div className="item-top"><div><small>{ITEM_LABELS[item.type]} · {availability(item)}</small><h2>{expanded ? item.title : <button className="title-button" onClick={onOpen}>{item.title}</button>}</h2></div>{(onEdit || controls) && <div className="actions">{onEdit && <button onClick={onEdit} aria-label={`Edit ${item.title}`}>Edit</button>}{controls}</div>}</div>
     {job && job.status !== "completed" && <p className={`job-status job-${job.status}`}>{job.status === "queued" ? "Waiting for processing…" : job.status === "running" ? "Processing…" : `Processing failed${job.lastError ? `: ${job.lastError}` : "."}`}</p>}
-    {item.metadata.thumbnailUrl && <UploadedImage src={item.metadata.thumbnailUrl} alt={item.title} />}{item.description && <p>{item.description}</p>}<ItemContent item={item} />{item.metadata.importedListId && <p><a href={`/lists/${encodeURIComponent(item.metadata.importedListId)}`}>Open imported playlist →</a></p>}{item.metadata.derived && <aside className="derived"><strong>Processed summary</strong><p>{item.metadata.derived.summary}</p><small>{Object.entries(item.metadata.derived.attributes).map(([name, value]) => `${name}: ${Array.isArray(value) ? value.join(", ") : value}`).join(" · ")}</small></aside>}<TagRow tags={item.tags} />
+    {item.metadata.thumbnailUrl && <UploadedImage src={item.metadata.thumbnailUrl} alt={item.title} />}{item.description && <p>{item.description}</p>}<ItemContent item={item} />
+    {item.metadata.importedListId && <p><a href={`/lists/${encodeURIComponent(item.metadata.importedListId)}`}>Open imported playlist →</a></p>}{item.metadata.derived && <aside className="derived"><strong>Processed summary</strong><p>{item.metadata.derived.summary}</p><small>{Object.entries(item.metadata.derived.attributes).map(([name, value]) => `${name}: ${Array.isArray(value) ? value.join(", ") : value}`).join(" · ")}</small></aside>}<TagRow tags={item.tags} />
+    {music && item.metadata.year && <p>{item.metadata.year}</p>}
+    {(spotifyUrl || spotifySearch || appleMusicUrl || appleSearch || youtubeVideo || youtubeSearch) && <div className="actions">
+      {spotifyUrl && <a href={spotifyUrl} target="_blank" rel="noopener noreferrer">Open in Spotify ↗</a>}
+      {spotifySearch && <a href={spotifySearch} target="_blank" rel="noopener noreferrer">Search on Spotify ↗</a>}
+      {appleMusicUrl && <a href={appleMusicUrl} target="_blank" rel="noopener noreferrer">Open in Apple Music ↗</a>}
+      {appleSearch && <a href={appleSearch} target="_blank" rel="noopener noreferrer">Search on Apple Music ↗</a>}
+      {youtubeVideo && <a href={youtubeVideo} target="_blank" rel="noopener noreferrer">Watch on YouTube ↗</a>}
+      {youtubeSearch && <a href={youtubeSearch} target="_blank" rel="noopener noreferrer">Search on YouTube ↗</a>}
+    </div>}
   </article>;
+}
+
+function serviceLink(value: string | undefined, origin: string) {
+  const url = value ? URL.parse(value) : null;
+  return url?.origin === origin ? url.href : undefined;
 }
 
 function UploadedImage({ src, alt }: { src: string; alt: string }) {
@@ -226,7 +252,7 @@ function ItemContent({ item }: { item: Item }) {
   if (item.type === "image" && item.metadata.dataUrl) return <UploadedImage src={item.metadata.dataUrl} alt={item.title} />;
   if (item.type === "pdf") return <p>{item.metadata.dataUrl ? <a href={item.metadata.dataUrl} target="_blank">Open {item.metadata.fileName || "PDF"}</a> : item.sourceUrl ? <a href={item.sourceUrl}>Open PDF</a> : "PDF unavailable"}</p>;
   if (item.type === "media" && item.metadata.platform === "youtube" && item.metadata.platformId) return <div className="video"><iframe src={`https://www.youtube-nocookie.com/embed/${item.metadata.platformId}`} title={item.title} allowFullScreen /></div>;
-  if (item.type === "url" || item.type === "media") return item.sourceUrl ? <p><a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl} ↗</a></p> : null;
+  if (item.type === "url" || item.type === "media" || item.type === "album" || item.type === "track") return item.sourceUrl && !spotifyMusicUrl(item.sourceUrl) ? <p><a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl} ↗</a></p> : null;
   if (item.type === "movie") return <p>{item.metadata.year || "Year unknown"}{item.metadata.tmdbId && <> · <a href={`https://www.themoviedb.org/movie/${item.metadata.tmdbId}`} target="_blank" rel="noreferrer">TMDB {item.metadata.tmdbId} ↗</a></>}</p>;
   if (item.type === "clothing") return <>{(item.sourceUrl || item.metadata.url) && <p><a href={item.sourceUrl || item.metadata.url} target="_blank" rel="noreferrer">{item.sourceUrl || item.metadata.url} ↗</a></p>}<div className="clothing">{item.metadata.dataUrl && <UploadedImage src={item.metadata.dataUrl} alt={item.title} />}<div><p><strong>Size:</strong> {item.metadata.size || "—"}</p><dl>{(item.metadata.measurements ?? []).map((measurement) => <div key={measurement.id}><dt>{measurement.name}</dt><dd>{measurement.value}{measurement.unit ? ` ${measurement.unit}` : ""}</dd></div>)}</dl></div></div></>;
   return null;

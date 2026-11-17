@@ -1,8 +1,11 @@
+import { spotifyMusic } from "./spotify";
 import type { ItemType } from "./types";
 
 export function classify(value: string, file?: Pick<File, "name" | "type"> | null): ItemType {
   if (file?.type.startsWith("image/")) return "image";
   if (file?.type === "application/pdf" || file?.name.toLowerCase().endsWith(".pdf")) return "pdf";
+  const music = spotifyMusic(value);
+  if (music) return music.kind;
   if (/youtu\.be|youtube\.com|music\.apple\.com|soundcloud\.com/i.test(value)) return "media";
   if (/\.pdf(?:$|[?#])/i.test(value)) return "pdf";
   if (/^https?:\/\//i.test(value.trim())) return "url";

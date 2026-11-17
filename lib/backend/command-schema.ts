@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_TYPES } from "../types";
 const id = z.string().min(1).max(256);
 const text = z.string().max(100_000);
 const tags = z.array(z.string().min(1).max(100)).max(100);
@@ -6,7 +7,7 @@ const metadata = z.record(z.unknown());
 const list = z.object({ id, title: z.string().min(1).max(1000), description: text, tags,
   defaultView: z.enum(["list", "grid", "compact", "gallery", "playlist", "document", "table"]),
   createdAt: z.string(), updatedAt: z.string(), metadata: metadata.optional() }).strict();
-const item = z.object({ id, type: z.enum(["note", "url", "media", "pdf", "image", "movie", "clothing"]),
+const item = z.object({ id, type: z.enum(ITEM_TYPES),
   title: z.string().min(1).max(1000), description: text, tags, sourceUrl: z.string().max(10000).optional(),
   availability: z.object({ external: z.boolean(), localReference: z.boolean(), imported: z.boolean() }).strict(),
   metadata, revision: z.number().int().positive().optional(), createdAt: z.string().optional(), updatedAt: z.string().optional() }).strict();

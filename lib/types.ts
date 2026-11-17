@@ -1,4 +1,5 @@
-export type ItemType = "note" | "url" | "media" | "pdf" | "image" | "movie" | "clothing";
+export const ITEM_TYPES = ["note", "url", "media", "pdf", "image", "movie", "clothing", "album", "track"] as const;
+export type ItemType = typeof ITEM_TYPES[number];
 export type ViewMode = "list" | "grid" | "compact" | "gallery" | "playlist" | "document" | "table";
 
 export type Measurement = { id: string; name: string; value: string | number; unit?: "in" | "cm" };
@@ -18,6 +19,8 @@ export type ItemMetadata = {
   artist?: string;
   artists?: string[];
   spotifyUrl?: string;
+  appleMusicUrl?: string;
+  youtubeUrl?: string;
   importedListId?: string;
   fileName?: string;
   dataUrl?: string;
@@ -31,6 +34,7 @@ export type ItemMetadata = {
     title?: string;
     summary: string;
     category?: ItemType;
+    tags?: string[];
     specs?: Partial<Omit<ItemMetadata, "derived">>;
     attributes: Record<string, string | number | string[]>;
     processedAt: string;
@@ -84,7 +88,7 @@ export type ListItem = { id: string; listId: string; itemId: string; position: n
 export type Database = { lists: List[]; items: Item[]; listItems: ListItem[]; jobs: ProcessingJob[] };
 
 export const ITEM_LABELS: Record<ItemType, string> = {
-  note: "Note", url: "Website", media: "Media", pdf: "PDF", image: "Image", movie: "Movie", clothing: "Clothing",
+  note: "Note", url: "Website", media: "Media", pdf: "PDF", image: "Image", movie: "Movie", clothing: "Clothing", album: "Album", track: "Track",
 };
 
 export const MEASUREMENT_PRESETS = ["chest", "sleeve", "length", "collar", "waist", "hem", "inseam", "outseam", "thigh"];

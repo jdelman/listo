@@ -4,19 +4,25 @@ import type { LogFields } from "../logging";
 import { decodeHTML } from "entities";
 import type { JobProcessor } from "./contracts";
 import { uid, type Item, type ItemMetadata } from "../types";
+import { enrichSpotifyMusic } from "./spotify-music";
 import { enrichmentSchema, enrichmentJsonSchema } from "./enrichment-schema";
 import { findAlternateSources, isBlockedPage } from "./alternate-sources";
 
 export class ItemEnrichmentProcessor implements JobProcessor {
   readonly kind = "process-item" as const;
 
-  constructor(private readonly options: { apiKey?: string; model?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void } = {}) {}
+  constructor(private readonly options: { apiKey?: string; model?: string; spotifyAccessToken?: string; youtubeApiKey?: string; storage?: ThumbnailStorage; fetch?: typeof fetch; onEvent?: (description: string, fields?: LogFields) => void } = {}) {}
 
   async process(item: Item, signal: AbortSignal) {
-    const apiKey = this.options.apiKey ?? process.env.OPENROUTER_KEY;
-    if (!apiKey) throw new Error("OPENROUTER_KEY is required for item enrichment");
     const request = this.options.fetch ?? fetch;
     const storage = this.options.storage ?? new FileThumbnailStorage();
+    const music = await enrichSpotifyMusic(item, {
+      request, storage, signal, accessToken: this.options.spotifyAccessToken,
+      youtubeKey: this.options.youtubeApiKey ?? process.env.YOUTUBE_API_KEY,
+    });
+    if (music) return music;
+    const apiKey = this.options.apiKey ?? process.env.OPENROUTER_KEY;
+    if (!apiKey) throw new Error("OPENROUTER_KEY is required for item enrichment");
     let thumbnailUrl: string | undefined;
     let pageTitle: string | undefined;
     let alternateSources: string[] = [];

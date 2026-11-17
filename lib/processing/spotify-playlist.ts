@@ -3,6 +3,7 @@ import type { ClaimedJob } from "../backend/contracts";
 import type { Item, List } from "../types";
 import { spotifyPlaylistId } from "../spotify";
 import { FileThumbnailStorage, type ThumbnailStorage } from "../storage/thumbnail-storage";
+import { spotifyAccessToken } from "./spotify-auth";
 import { storeThumbnail } from "./thumbnails";
 import type { JobProcessor } from "./contracts";
 
@@ -22,7 +23,7 @@ export class SpotifyPlaylistProcessor implements JobProcessor {
     const request = this.options.fetch ?? fetch;
     // Bound an attempt below the queue lease; subsequent attempts resume stored positions.
     signal = AbortSignal.any([signal, AbortSignal.timeout(240_000)]);
-    const token = await this.accessToken(request, signal);
+    const token = this.options.accessToken ?? await spotifyAccessToken(request, signal, { playlist: true });
     const get = async <T>(url: string): Promise<T> => {
       const parsed = new URL(url);
       if (parsed.origin !== "https://api.spotify.com" || !parsed.pathname.startsWith(`/v1/playlists/${id}`)) throw new Error("Invalid Spotify pagination URL");
@@ -82,23 +83,6 @@ export class SpotifyPlaylistProcessor implements JobProcessor {
     return { summary: `Imported ${imported} tracks from ${playlist.name}.${skipped ? ` Skipped ${skipped} unavailable, local, or non-track entries.` : ""}`, category: "media" as const,
       specs: { platform: "spotify" as const, platformId: id, importedListId: list.id, thumbnailUrl: list.metadata?.thumbnailUrl },
       attributes: { imported, skipped }, processedAt: new Date().toISOString(), processorVersion: "spotify-playlist:v1" };
-  }
-
-  private async accessToken(request: typeof fetch, signal: AbortSignal) {
-    if (this.options.accessToken) return this.options.accessToken;
-    const { SPOTIFY_CLIENT_ID: clientId, SPOTIFY_CLIENT_SECRET: clientSecret, SPOTIFY_REFRESH_TOKEN: refreshToken, SPOTIFY_ACCESS_TOKEN: accessToken } = process.env;
-    if (!refreshToken) {
-      if (accessToken) return accessToken;
-      throw new Error("Configure SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET and SPOTIFY_REFRESH_TOKEN (or SPOTIFY_ACCESS_TOKEN) to import playlists");
-    }
-    if (!clientId || !clientSecret) throw new Error("Spotify token refresh requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET");
-    const response = await request("https://accounts.spotify.com/api/token", { method: "POST", signal, redirect: "error",
-      headers: { Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }) });
-    if (!response.ok) throw new Error(`Spotify token refresh failed (HTTP ${response.status}); check Spotify credentials`);
-    const data = await response.json() as { access_token?: string };
-    if (!data.access_token) throw new Error("Spotify did not return an access token");
-    return data.access_token;
   }
 
   private async thumbnail(images: { url: string }[] | undefined, sourceUrl: string, request: typeof fetch, signal: AbortSignal) {
