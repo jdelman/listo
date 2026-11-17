@@ -93,6 +93,15 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     })();
   }
 
+  refreshListItems(id: string): number {
+    return this.db.transaction(() => {
+      const listId = this.ownedList(id);
+      const entries = this.listEntries(listId);
+      for (const entry of entries) this.refreshItem(entry.itemId);
+      return entries.length;
+    }).immediate();
+  }
+
   refreshItem(id: string): ProcessingJob {
     return this.db.transaction(() => {
       this.requireUser();

@@ -18,6 +18,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("updateList"), id, patch: editableList }).strict(),
   z.object({ type: z.literal("deleteList"), id }).strict(),
   z.object({ type: z.literal("createItem"), item, listIds: z.array(id).max(1000) }).strict(),
+  z.object({ type: z.literal("refreshListItems"), id }).strict(),
   z.object({ type: z.literal("refreshItem"), id }).strict(),
   z.object({ type: z.literal("updateItem"), id, patch: editableItem }).strict(),
   z.object({ type: z.literal("deleteItem"), id }).strict(),

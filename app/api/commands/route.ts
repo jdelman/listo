@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       case "updateList": result = backend.updateList(command.id, command.patch); break;
       case "deleteList": result = backend.deleteList(command.id); break;
       case "createItem": result = backend.createItem(command.item, command.listIds); break;
+      case "refreshListItems": result = backend.refreshListItems(command.id); break;
       case "refreshItem": result = backend.refreshItem(command.id); break;
       case "updateItem": result = backend.updateItem(command.id, command.patch); break;
       case "deleteItem": result = backend.deleteItem(command.id); break;

@@ -108,12 +108,25 @@ function ListScreen({ store, screen, navigate, flash }: { store: ReturnType<type
   const listId = screen.id;
   const list = store.db.lists.find((candidate) => candidate.id === listId);
   const editing = Boolean(screen.editing);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState(screen.query ?? "");
   if (!list) return <p>That list no longer exists.</p>;
   const activeList = list;
   const placements = store.db.listItems.filter((entry) => entry.listId === listId).sort((a, b) => a.position - b.position);
   const items = placements.map((entry) => store.db.items.find((item) => item.id === entry.itemId)).filter((item): item is Item => Boolean(item));
   const visible = filter ? items.filter((item) => searchable(item).includes(filter.toLowerCase())) : items;
+
+  async function refreshAllItems() {
+    setRefreshing(true);
+    try {
+      await store.refreshListItems(activeList.id);
+      flash("Refresh queued for all items in this list.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Could not refresh this list.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   function saveList(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
@@ -127,7 +140,7 @@ function ListScreen({ store, screen, navigate, flash }: { store: ReturnType<type
       <label>Title<input name="title" defaultValue={list.title} required /></label><label>Description<input name="description" defaultValue={list.description} /></label>
       <TagInput key={list.id} options={tagOptions(store)} defaultValue={list.tags} /><label>View<select name="view" defaultValue={list.defaultView}>{["list", "grid", "compact", "gallery", "playlist", "document", "table"].map((mode) => <option key={mode}>{mode}</option>)}</select></label>
       <div className="actions"><button className="primary">Save</button><button type="button" onClick={() => navigate({ ...screen, editing: false }, true)}>Cancel</button></div>
-    </form> : <div className="page-heading"><div><h1>{list.title}</h1>{list.metadata?.thumbnailUrl && <UploadedImage src={list.metadata.thumbnailUrl} alt={list.title} />}<p>{linkify(list.description)}</p><TagRow tags={list.tags} /></div><div className="actions"><button onClick={() => navigate({ ...screen, editing: true })}>Edit list</button><button onClick={() => exportList(list, items)}>Export HTML</button>{list.id !== "inbox" && <button className="danger" onClick={() => { if (confirm("Delete this list? Its items will remain in other lists.")) { store.deleteList(list.id); navigate({ name: "lists" }); } }}>Delete list</button>}</div></div>}
+    </form> : <div className="page-heading"><div><h1>{list.title}</h1>{list.metadata?.thumbnailUrl && <UploadedImage src={list.metadata.thumbnailUrl} alt={list.title} />}<p>{linkify(list.description)}</p><TagRow tags={list.tags} /></div><div className="actions"><button onClick={() => navigate({ ...screen, editing: true })}>Edit list</button><button onClick={() => exportList(list, items)}>Export HTML</button><button type="button" disabled={refreshing || items.length === 0} onClick={refreshAllItems}>{refreshing ? "Queuing refresh…" : "Refresh all items"}</button>{list.id !== "inbox" && <button className="danger" onClick={() => { if (confirm("Delete this list? Its items will remain in other lists.")) { store.deleteList(list.id); navigate({ name: "lists" }); } }}>Delete list</button>}</div></div>}
     <div className="toolbar"><button className="primary" onClick={() => navigate({ name: "quick", destinationListId: list.id })}>Add an item</button><label>Search this list<input value={filter} onChange={(event) => { setFilter(event.target.value); navigate({ ...screen, query: event.target.value || undefined }, true); }} /></label><label>View<select value={list.defaultView} onChange={(event) => store.updateList(list.id, { defaultView: event.target.value as List["defaultView"] })}>{["list", "grid", "compact", "gallery", "playlist", "document", "table"].map((mode) => <option key={mode} value={mode}>{mode === "grid" ? "Grid" : mode}</option>)}</select></label><span>{items.length} items</span></div>
     {visible.length === 0 ? <div className="empty"><p>{items.length ? "Nothing matches that search." : "This list is empty."}</p><button onClick={() => navigate({ name: "quick", destinationListId: list.id })}>Add the first item</button></div> : <div className={`items view-${list.defaultView}`}>
       {visible.map((item, index) => {

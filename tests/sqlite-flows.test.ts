@@ -73,3 +73,27 @@ test("grid view is accepted by commands and persisted per list", () => {
     assert.equal(state.lists.find((entry) => entry.id === "other-list")?.defaultView, "list");
   } finally { context.close(); }
 });
+
+test("refreshing a list queues its completed items and preserves active jobs", () => {
+  const { backend, close } = fixture();
+  try {
+    backend.createList(list("refresh-list"));
+    backend.createList(list("outside-list"));
+    backend.createItem(note("done", "Done"), ["refresh-list"]);
+    backend.createItem(note("active", "Active"), ["refresh-list"]);
+    backend.createItem(note("outside", "Outside"), ["outside-list"]);
+    const job = backend.claim("test", 300000)!;
+    backend.complete(job.id, job.lockToken);
+    const before = backend.getDatabase().jobs;
+    assert.equal(backend.refreshListItems("refresh-list"), 2);
+    const after = backend.getDatabase().jobs;
+    assert.equal(after.length, before.length);
+    assert.equal(after.find(entry => entry.id === job.id)?.status, "queued");
+    assert.deepEqual(after.find(entry => entry.itemId === "outside"), before.find(entry => entry.itemId === "outside"));
+    assert.deepEqual(after.find(entry => entry.itemId === "active"), before.find(entry => entry.itemId === "active"));
+    assert.equal(backend.refreshListItems("refresh-list"), 2);
+    assert.equal(backend.getDatabase().jobs.length, before.length);
+    assert.throws(() => backend.refreshListItems("missing"), /not found/);
+    assert.deepEqual(commandSchema.parse({ type: "refreshListItems", id: "refresh-list" }), { type: "refreshListItems", id: "refresh-list" });
+  } finally { close(); }
+});
