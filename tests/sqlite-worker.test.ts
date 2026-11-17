@@ -10,6 +10,8 @@ import { SQLiteBackend } from "../lib/backend/sqlite/sqlite-backend";
 import { ItemEnrichmentProcessor } from "../lib/processing/item-processor";
 import { completion, enrichment } from "./fixtures/enrichment";
 import { runOne } from "../worker/runner";
+import { accountFixture } from "./account-fixture";
+import { POST as command } from "../app/api/commands/route";
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "listo-test-"));
@@ -72,6 +74,49 @@ test("the worker claims, processes, and completes a job", async () => {
     assert.match(state.items[0].metadata.derived?.summary ?? "", /useful note/i);
     assert.equal(state.items[0].metadata.derived?.processorVersion, "openrouter:openai/gpt-5.6-luna:v1");
   } finally { context.close(); }
+});
+
+test("refreshing an item reruns its fetch, updates metadata, and keeps its placement", async (t) => {
+  const context = accountFixture();
+  t.after(() => context.close());
+  const sourceUrl = "https://example.com/item";
+  const item = { ...note(), type: "url" as const, sourceUrl, metadata: { price: 42 } };
+  const original = context.backend.createItem(item, ["inbox"]);
+  const previous = context.backend.claim("previous-worker", 60_000);
+  assert.ok(previous);
+  context.backend.complete(previous.id, previous.lockToken);
+  const placement = context.backend.getDatabase().listItems[0];
+
+  const refresh = () => command(new Request("http://localhost:3000/api/commands", {
+    method: "POST", headers: { origin: "http://localhost:3000", cookie: context.cookie },
+    body: JSON.stringify({ type: "refreshItem", id: item.id }),
+  }));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await refresh();
+    assert.equal(response.status, 200);
+    assert.partialDeepStrictEqual((await response.json()).result, { id: original.id, status: "queued", attempts: 0 });
+  }
+
+  let fetches = 0;
+  const processor = new ItemEnrichmentProcessor({
+    apiKey: "test",
+    fetch: async (url) => {
+      if (url === sourceUrl) {
+        fetches++;
+        return new Response("<title>Updated item</title>");
+      }
+      return completion(enrichment({ category: "clothing", thumbnailUrl: null, specs: { ...enrichment().specs, price: 39 } }));
+    },
+  });
+  assert.equal(await runOne({ queue: context.backend, store: context.backend, processors: [processor], workerId: "refresh-worker" }), true);
+  const state = context.backend.getDatabase();
+  assert.equal(fetches, 1);
+  assert.equal(state.jobs.length, 1);
+  assert.equal(state.jobs[0].status, "completed");
+  assert.equal(state.items[0].id, item.id);
+  assert.equal(state.items[0].title, "Updated item");
+  assert.equal(state.items[0].metadata.price, 39);
+  assert.deepEqual(state.listItems, [placement]);
 });
 
 test("expired worker leases return jobs to the queue", () => {

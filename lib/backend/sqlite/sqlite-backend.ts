@@ -91,6 +91,23 @@ export class SQLiteBackend implements StorageBackend, JobQueueBackend, ItemProce
     })();
   }
 
+  refreshItem(id: string): ProcessingJob {
+    return this.db.transaction(() => {
+      this.requireUser();
+      const item = this.getItem(id);
+      if (!item) throw new Error("Item not found");
+
+      const job = this.enqueueItemJob(id, item.revision, true);
+      if (job.status === "queued" || job.status === "running") return job;
+
+      const timestamp = new Date().toISOString();
+      const row = this.db.prepare(`UPDATE jobs
+        SET status = 'queued', attempts = 0, run_at = ?, updated_at = ?, lock_token = NULL, locked_at = NULL, last_error = NULL
+        WHERE id = ? RETURNING *`).get(timestamp, timestamp, job.id) as JobRow;
+      return toJob(row);
+    }).immediate();
+  }
+
   updateItem(id: string, patch: Partial<Item>): void {
     const current = this.getItem(id);
     if (!current) throw new Error("Item not found");

@@ -89,6 +89,11 @@ export function useListoStore(username: string) {
     return id;
   }
 
+  async function refreshItem(id: string) {
+    await sendCommand({ type: "refreshItem", id }, username);
+    await refresh();
+  }
+
   function updateItem(id: string, patch: Partial<Item>) {
     setDb((current) => ({ ...current, items: current.items.map((item) => item.id === id ? { ...item, ...patch, id, revision: item.revision + 1, updatedAt: now() } : item) }));
     persist({ type: "updateItem", id, patch });
@@ -148,7 +153,7 @@ export function useListoStore(username: string) {
     } catch { setError("Could not import older lists. Your browser copy is still saved."); }
   }
 
-  return { db, ready, error, hasLegacy, importLegacy, createList, updateList, deleteList, createItem, updateItem, deleteItem, setItemLists, removeFromList, moveItem, reorderItem };
+  return { db, ready, error, hasLegacy, importLegacy, createList, updateList, deleteList, createItem, refreshItem, updateItem, deleteItem, setItemLists, removeFromList, moveItem, reorderItem };
 }
 
 async function sendCommand(command: StorageCommand, username: string) {

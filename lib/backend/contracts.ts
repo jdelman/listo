@@ -9,6 +9,7 @@ export interface StorageBackend {
   updateList(id: string, patch: Partial<List>): Promise<void> | void;
   deleteList(id: string): Promise<void> | void;
   createItem(item: NewItem, listIds: string[]): Promise<ProcessingJob> | ProcessingJob;
+  refreshItem(id: string): Promise<ProcessingJob> | ProcessingJob;
   updateItem(id: string, patch: Partial<Item>): Promise<void> | void;
   deleteItem(id: string): Promise<void> | void;
   setItemLists(itemId: string, listIds: string[]): Promise<void> | void;
@@ -37,6 +38,7 @@ export type StorageCommand =
   | { type: "updateList"; id: string; patch: Partial<List> }
   | { type: "deleteList"; id: string }
   | { type: "createItem"; item: NewItem; listIds: string[] }
+  | { type: "refreshItem"; id: string }
   | { type: "updateItem"; id: string; patch: Partial<Item> }
   | { type: "deleteItem"; id: string }
   | { type: "setItemLists"; itemId: string; listIds: string[] }

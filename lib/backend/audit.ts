@@ -4,6 +4,7 @@ const descriptions: Record<string, string> = {
   getDatabase: "Read application state", getItem: "Read item", importDatabase: "Import database",
   createList: "Create list", updateList: "Update list", deleteList: "Delete list",
   createItem: "Create item and queue enrichment", updateItem: "Update item", deleteItem: "Delete item",
+  refreshItem: "Queue item refresh",
   setItemLists: "Change item list memberships", removeFromList: "Remove item from list",
   moveItem: "Move item in list", reorderItem: "Reorder item in list",
   saveDerivedMetadata: "Save item enrichment",

@@ -76,6 +76,7 @@ test("users cannot access or mutate each other's records, memberships, tags or t
     f.backend.createItem(note("private-item"), ["inbox"]);
     other.createItem(note("other-item"), ["inbox"]);
     assert.equal(other.getItem("private-item"), null);
+    assert.throws(() => other.refreshItem("private-item"), /not found/);
     const time = new Date().toISOString();
     f.backend.createList({ id: "private-list", title: "Private", description: "", tags: ["hidden"], defaultView: "list", createdAt: time, updatedAt: time });
     for (const action of [() => other.updateItem("private-item", { title: "leak" }), () => other.deleteItem("private-item"), () => other.updateList("private-list", { title: "leak" }), () => other.deleteList("private-list"), () => other.setItemLists("other-item", ["private-list"]), () => other.removeFromList("private-list", "other-item"), () => other.moveItem("private-list", "other-item", 1), () => other.reorderItem("inbox", "other-item", "private-item"), () => other.createItem(note("bad"), ["private-list"])]) assert.throws(action, /not found/);
