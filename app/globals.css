@@ -46,9 +46,28 @@ fieldset { border: 1px solid #aaa; padding: 12px; }
 .toolbar label { margin-left: auto; }
 .items { display: grid; gap: 14px; }
 .view-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; }
-.view-grid .item-top { display: grid; }
-.view-grid .item-card { overflow-wrap: anywhere; }
-.view-grid .clothing { grid-template-columns: minmax(0, 1fr); }
+.grid-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #41413b;
+  color: #fff;
+}
+.grid-tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.grid-tile span {
+  position: relative;
+  max-width: calc(100% - 16px);
+  padding: 5px 9px;
+  background: rgb(0 0 0 / 75%);
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+.grid-tile:focus-visible { outline: 2px solid #17458b; outline-offset: 2px; }
 .view-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .view-compact .item-card { padding: 9px 12px; }
 .view-compact .item-card p, .view-compact .item-card .preview { display: none; }

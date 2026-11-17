@@ -130,7 +130,23 @@ function ListScreen({ store, screen, navigate, flash }: { store: ReturnType<type
     </form> : <div className="page-heading"><div><h1>{list.title}</h1>{list.metadata?.thumbnailUrl && <UploadedImage src={list.metadata.thumbnailUrl} alt={list.title} />}<p>{linkify(list.description)}</p><TagRow tags={list.tags} /></div><div className="actions"><button onClick={() => navigate({ ...screen, editing: true })}>Edit list</button><button onClick={() => exportList(list, items)}>Export HTML</button>{list.id !== "inbox" && <button className="danger" onClick={() => { if (confirm("Delete this list? Its items will remain in other lists.")) { store.deleteList(list.id); navigate({ name: "lists" }); } }}>Delete list</button>}</div></div>}
     <div className="toolbar"><button className="primary" onClick={() => navigate({ name: "quick", destinationListId: list.id })}>Add an item</button><label>Search this list<input value={filter} onChange={(event) => { setFilter(event.target.value); navigate({ ...screen, query: event.target.value || undefined }, true); }} /></label><label>View<select value={list.defaultView} onChange={(event) => store.updateList(list.id, { defaultView: event.target.value as List["defaultView"] })}>{["list", "grid", "compact", "gallery", "playlist", "document", "table"].map((mode) => <option key={mode} value={mode}>{mode === "grid" ? "Grid" : mode}</option>)}</select></label><span>{items.length} items</span></div>
     {visible.length === 0 ? <div className="empty"><p>{items.length ? "Nothing matches that search." : "This list is empty."}</p><button onClick={() => navigate({ name: "quick", destinationListId: list.id })}>Add the first item</button></div> : <div className={`items view-${list.defaultView}`}>
-      {visible.map((item, index) => <ItemCard key={item.id} item={item} job={latestJob(store.db.jobs, item.id)} draggable={!filter} onDragStart={(event) => event.dataTransfer.setData("text/plain", item.id)} onDrop={(event) => { event.preventDefault(); store.reorderItem(list.id, event.dataTransfer.getData("text/plain"), item.id); }} onOpen={() => navigate({ name: "item", id: item.id, returnTo: urlForScreen(screen) })} onEdit={() => navigate({ name: "item", id: item.id, editing: true, returnTo: urlForScreen(screen) })} controls={<><button disabled={Boolean(filter) || index === 0} onClick={() => store.moveItem(list.id, item.id, -1)} aria-label={`Move ${item.title} up`}>↑</button><button disabled={Boolean(filter) || index === visible.length - 1} onClick={() => store.moveItem(list.id, item.id, 1)} aria-label={`Move ${item.title} down`}>↓</button><button onClick={() => store.removeFromList(list.id, item.id)}>Remove</button></>} />)}
+      {visible.map((item, index) => {
+        const onOpen = () => navigate({ name: "item", id: item.id, returnTo: urlForScreen(screen) });
+        const dragProps = {
+          draggable: !filter,
+          onDragStart: (event: React.DragEvent) => event.dataTransfer.setData("text/plain", item.id),
+          onDrop: (event: React.DragEvent) => {
+            event.preventDefault();
+            store.reorderItem(list.id, event.dataTransfer.getData("text/plain"), item.id);
+          },
+        };
+
+        if (list.defaultView === "grid") {
+          return <GridTile key={item.id} item={item} onOpen={onOpen} {...dragProps} />;
+        }
+
+        return <ItemCard key={item.id} item={item} job={latestJob(store.db.jobs, item.id)} onOpen={onOpen} {...dragProps} onEdit={() => navigate({ name: "item", id: item.id, editing: true, returnTo: urlForScreen(screen) })} controls={<><button disabled={Boolean(filter) || index === 0} onClick={() => store.moveItem(list.id, item.id, -1)} aria-label={`Move ${item.title} up`}>↑</button><button disabled={Boolean(filter) || index === visible.length - 1} onClick={() => store.moveItem(list.id, item.id, 1)} aria-label={`Move ${item.title} down`}>↓</button><button onClick={() => store.removeFromList(list.id, item.id)}>Remove</button></>} />;
+      })}
     </div>}
   </section>;
 }
@@ -234,10 +250,24 @@ function SearchScreen({ store, screen, navigate }: { store: ReturnType<typeof us
 
 function ItemScreen({ store, screen, navigate, navigateUrl, flash }: { store: ReturnType<typeof useListoStore>; screen: Extract<Screen, { name: "item" }>; navigate: Navigate; navigateUrl: (url: string) => void; flash: (message: string) => void }) {
   const item = store.db.items.find((candidate) => candidate.id === screen.id); const editing = Boolean(screen.editing);
+  const [refreshing, setRefreshing] = useState(false);
   if (!item) return <p>That item no longer exists.</p>;
+  const job = latestJob(store.db.jobs, item.id);
+  const refreshPending = refreshing || (job?.inputRevision === item.revision && (job.status === "queued" || job.status === "running"));
   const activeItem = item;
   const currentImage = uploadedItemImage(item) || item.metadata.thumbnailUrl;
   const selected = store.db.listItems.filter((entry) => entry.itemId === item.id).map((entry) => entry.listId);
+  async function refreshItem() {
+    setRefreshing(true);
+    try {
+      await store.refreshItem(activeItem.id);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Could not refresh item.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -264,10 +294,37 @@ function ItemScreen({ store, screen, navigate, navigateUrl, flash }: { store: Re
     navigate({ ...screen, editing: false }, true);
     flash("Item updated.");
   }
-  return <section className="narrow"><button className="back" onClick={() => navigateUrl(screen.returnTo || "/lists")}>← Back</button><div className="page-heading"><div><small>{ITEM_LABELS[item.type]}</small><h1>{item.title}</h1></div><div className="actions"><button onClick={() => navigate({ ...screen, editing: !editing })}>{editing ? "Cancel editing" : "Edit"}</button><button className="danger" onClick={() => { if (confirm("Delete this item everywhere?")) { store.deleteItem(item.id); navigate({ name: "lists" }); } }}>Delete everywhere</button></div></div>
-    {editing ? <form className="panel form-grid" onSubmit={save}><label>Title<input name="title" defaultValue={item.title} required /></label><TagInput key={item.id} options={tagOptions(store)} defaultValue={item.tags} />{item.type === "clothing" && <><label>Size<input name="size" defaultValue={item.metadata.size} /></label><ClothingPriceFields metadata={item.metadata} /></>}<ImageField />{currentImage && <UploadedImage src={currentImage} alt={item.title} />}{item.metadata.imageDataUrl && <label className="checkbox"><input type="checkbox" name="removeImage" /> Remove uploaded image</label>}<label className="full">Description<textarea name="description" defaultValue={item.description} rows={3} /></label>{(item.type === "note" || item.metadata.markdown !== undefined) && <label className="full">Markdown<textarea name="markdown" defaultValue={item.metadata.markdown} rows={10} /></label>}<fieldset className="full"><legend>Appears in</legend>{store.db.lists.map((list) => <label className="checkbox" key={list.id}><input type="checkbox" name="lists" value={list.id} defaultChecked={selected.includes(list.id)} /> {list.title}</label>)}</fieldset><div className="actions"><button className="primary" type="submit">Save changes</button><button type="button" onClick={() => navigate({ ...screen, editing: false }, true)}>Cancel</button></div></form> : <ItemCard item={item} job={latestJob(store.db.jobs, item.id)} onOpen={() => undefined} expanded />}
+  return <section className="narrow"><button className="back" onClick={() => navigateUrl(screen.returnTo || "/lists")}>← Back</button><div className="page-heading"><div><small>{ITEM_LABELS[item.type]}</small><h1>{item.title}</h1></div><div className="actions">{!editing && <button type="button" disabled={refreshPending} onClick={refreshItem}>Refresh</button>}<button onClick={() => navigate({ ...screen, editing: !editing })}>{editing ? "Cancel editing" : "Edit"}</button><button className="danger" onClick={() => { if (confirm("Delete this item everywhere?")) { store.deleteItem(item.id); navigate({ name: "lists" }); } }}>Delete everywhere</button></div></div>
+    {editing ? <form className="panel form-grid" onSubmit={save}><label>Title<input name="title" defaultValue={item.title} required /></label><TagInput key={item.id} options={tagOptions(store)} defaultValue={item.tags} />{item.type === "clothing" && <><label>Size<input name="size" defaultValue={item.metadata.size} /></label><ClothingPriceFields metadata={item.metadata} /></>}<ImageField />{currentImage && <UploadedImage src={currentImage} alt={item.title} />}{item.metadata.imageDataUrl && <label className="checkbox"><input type="checkbox" name="removeImage" /> Remove uploaded image</label>}<label className="full">Description<textarea name="description" defaultValue={item.description} rows={3} /></label>{(item.type === "note" || item.metadata.markdown !== undefined) && <label className="full">Markdown<textarea name="markdown" defaultValue={item.metadata.markdown} rows={10} /></label>}<fieldset className="full"><legend>Appears in</legend>{store.db.lists.map((list) => <label className="checkbox" key={list.id}><input type="checkbox" name="lists" value={list.id} defaultChecked={selected.includes(list.id)} /> {list.title}</label>)}</fieldset><div className="actions"><button className="primary" type="submit">Save changes</button><button type="button" onClick={() => navigate({ ...screen, editing: false }, true)}>Cancel</button></div></form> : <ItemCard item={item} job={job} onOpen={() => undefined} expanded />}
     <section><h2>Lists containing this item</h2><div className="actions">{store.db.lists.filter((list) => selected.includes(list.id)).map((list) => <button key={list.id} onClick={() => navigate({ name: "list", id: list.id })}>{list.title}</button>)}</div></section>
   </section>;
+}
+
+function GridTile({ item, onOpen, draggable, onDragStart, onDrop }: {
+  item: Item;
+  onOpen: () => void;
+  draggable: boolean;
+  onDragStart: React.DragEventHandler;
+  onDrop: React.DragEventHandler;
+}) {
+  const thumbnail = uploadedItemImage(item) || item.metadata.thumbnailUrl;
+  const [failedThumbnail, setFailedThumbnail] = useState<string>();
+  const src = thumbnail && thumbnail !== failedThumbnail ? thumbnail : "/thumbnail-placeholder.svg";
+
+  return <button
+    className="grid-tile"
+    type="button"
+    title={item.title}
+    onClick={onOpen}
+    draggable={draggable}
+    onDragStart={onDragStart}
+    onDragOver={(event) => draggable && event.preventDefault()}
+    onDrop={onDrop}
+  >
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={src} alt="" draggable={false} loading="lazy" onError={() => setFailedThumbnail(thumbnail)} />
+    <span>{item.title}</span>
+  </button>;
 }
 
 function ItemCard({ item, job, onOpen, onEdit, controls, draggable, onDragStart, onDrop, expanded = false }: { item: Item; job?: ProcessingJob; onOpen: () => void; onEdit?: () => void; controls?: React.ReactNode; draggable?: boolean; onDragStart?: React.DragEventHandler; onDrop?: React.DragEventHandler; expanded?: boolean }) {
@@ -371,4 +428,4 @@ function availability(item: Item) { const { external, imported, localReference }
 function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
 function readFile(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }
 function searchable(item: Item) { return [item.title, item.description, item.tags.join(" "), item.sourceUrl, item.metadata.markdown, item.metadata.url, item.metadata.platform, item.metadata.year, item.metadata.tmdbId, item.metadata.name, item.metadata.size, item.metadata.price, item.metadata.currency, item.metadata.fileName, item.metadata.derived?.summary, ...Object.entries(item.metadata.derived?.attributes ?? {}).flatMap(([name, value]) => [name, Array.isArray(value) ? value.join(" ") : value]), ...(item.metadata.measurements ?? []).flatMap((measurement) => [measurement.name, measurement.value, measurement.unit])].join(" ").toLowerCase(); }
-function latestJob(jobs: ProcessingJob[], itemId: string) { return jobs.filter((job) => job.itemId === itemId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]; }
+function latestJob(jobs: ProcessingJob[], itemId: string) { return jobs.filter((job) => job.itemId === itemId).sort((a, b) => b.inputRevision - a.inputRevision || b.createdAt.localeCompare(a.createdAt))[0]; }
