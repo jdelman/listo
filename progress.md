@@ -38,7 +38,61 @@ Build the first genuinely useful local-first release described in `plan.md`, wit
 
 ## Working notes
 
-- Data is stored locally in the browser for this first vertical slice.
-- Imported files are represented with browser-managed data URLs; this proves the product flow while a desktop filesystem/database layer remains a future architecture step.
+- Canonical data is stored in `data/listo.sqlite`; browser storage is used only as a one-time migration source for the previous release.
+- Imported files are currently represented with data URLs stored in SQLite. Moving binary assets into a separate local asset directory remains a later storage improvement.
 - Movie entry is manual in this first slice so the core workflow does not depend on a TMDB credential.
 - Styling stays deliberately sparse: Times New Roman, borders, spacing, and basic responsive grids.
+
+## SQLite storage and worker
+
+- [x] Define backend-neutral storage and job-queue contracts
+- [x] Add the SQLite schema, migration runner, and application repository
+- [x] Move React persistence from browser storage to the local API
+- [x] Import any existing browser database into SQLite on first run
+- [x] Add transactional job creation for every new item
+- [x] Add a separate worker process with claims, leases, retries, and recovery
+- [x] Add an initial item enrichment processor and processing status in the UI
+- [x] Add automated storage/queue/worker tests and verify the full build
+
+### Architecture decision
+
+- SQLite is the canonical store for the local application.
+- The client uses a backend-neutral command API rather than importing SQLite directly.
+- Storage and job execution are expressed as TypeScript interfaces so a future D1/Cloudflare implementation can preserve the same application contract.
+- The current hosted version remains unchanged until a hosted storage/worker adapter exists; a local SQLite file cannot be used by a Cloudflare deployment.
+
+### Verification
+
+- SQLite application and queue tests: passed
+- Worker processing and stale-lease recovery tests: passed
+- End-to-end local API → SQLite → worker → derived metadata flow: passed
+- TypeScript strict check: passed
+- Production build: passed
+- Lint: passed with the same two intentional imported-image advisories
+
+## URL navigation and history
+
+- [x] Give Lists, Inbox, list detail, Search, Quick Add, and item detail stable URLs
+- [x] Render the application correctly after a direct visit or page reload on every route
+- [x] Use browser history for screen-to-screen navigation
+- [x] Preserve list/search filters, edit mode, Quick Add mode/destination, and item return context in query parameters
+- [x] Add route round-trip tests and verify every route responds successfully
+
+### Routes
+
+- `/lists` — list index
+- `/inbox` — Inbox
+- `/lists/:id` — list detail
+- `/search` — global search, including active filters
+- `/add` — Quick Add, including capture mode and destination
+- `/items/:id` — item detail, including edit and return state
+
+### Verification
+
+- URL parsing and state round-trip tests: passed
+- All 10 automated flow tests: passed
+- Direct HTTP checks for each route: passed
+- Browser Back/Forward and state-preserving reload checks: passed
+- TypeScript strict check: passed
+- Production build: passed
+- Lint: passed with the same two intentional imported-image advisories

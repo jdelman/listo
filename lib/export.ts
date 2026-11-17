@@ -21,11 +21,15 @@ function renderItem(item: Item) {
   return `<article><small>${escapeHtml(item.type)}</small><h2>${escapeHtml(item.title)}</h2>${content}${tags}</article>`;
 }
 
-export function exportList(list: List, items: Item[]) {
-  const html = `<!doctype html>
+export function renderListHtml(list: List, items: Item[]) {
+  return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(list.title)}</title>
 <style>body{font-family:"Times New Roman",serif;max-width:800px;margin:0 auto;padding:24px;line-height:1.4;color:#111}header{border-bottom:2px solid;padding-bottom:16px;margin-bottom:24px}article{border:1px solid #999;padding:16px;margin:0 0 16px;overflow-wrap:anywhere}img{max-width:100%;height:auto}h1,h2,p{margin-top:0}.tags span{border:1px solid #999;padding:2px 6px}dl div{display:grid;grid-template-columns:minmax(100px,1fr) 2fr;border-top:1px solid #ccc;padding:4px 0}dt{text-transform:capitalize}dd{margin:0}@media(max-width:520px){body{padding:12px}article{padding:12px}}</style></head>
 <body><header><h1>${escapeHtml(list.title)}</h1><p>${escapeHtml(list.description)}</p></header><main>${items.map(renderItem).join("\n")}</main><footer><small>Exported from Listo</small></footer></body></html>`;
+}
+
+export function exportList(list: List, items: Item[]) {
+  const html = renderListHtml(list, items);
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
